@@ -1,0 +1,23 @@
+# CPU-only requirements for local testing
+# Install PyTorch CPU, then other packages from PyPI
+
+# Core ML libraries (from PyPI)
+diffusers>=0.31.0
+transformers>=4.40.0
+safetensors>=0.4.0
+accelerate>=0.30.0
+sentencepiece
+protobuf
+
+# Image/Video processing
+Pillow
+numpy
+opencv-python-headless
+
+# Upscaling dependencies
+realesrgan>=0.3.0
+basicsr>=1.4.2
+requests>=2.31.0
+
+# PyTorch CPU will be installed separately
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu

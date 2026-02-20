@@ -1,0 +1,49 @@
+# Model Pipeline Configurations
+# Maps model IDs to their specific pipeline classes and settings
+
+models:
+  # Test Models (Small, CPU-friendly)
+  test_cpu:
+    model_class: "WanPipeline"
+    vae_class: "AutoencoderKLWan"
+    local_dir: "Wan2.2-TI2V-5B-Diffusers"
+    model_dtype: "bf16"
+    vae_dtype: "float32"
+
+  modelscope_t2v:
+    model_class: "TextToVideoSDPipeline"  # ✅ Different pipeline!
+    local_dir: "text-to-video-ms-1.7b"
+    model_dtype: "fp16"
+    # No VAE overrides needed for this model
+
+  # Wan Models
+  wan22_ti2v_5b:
+    model_class: "WanPipeline"
+    vae_class: "AutoencoderKLWan"
+    local_dir: "Wan2.2-TI2V-5B-Diffusers"
+    model_dtype: "bf16"
+    vae_dtype: "float32"
+
+  wan22_t2v_14b:
+    model_class: "WanPipeline"
+    vae_class: "AutoencoderKLWan"
+    local_dir: "Wan2.2-T2V-A14B-Diffusers"
+    model_dtype: "bf16"
+    vae_dtype: "float32"
+
+  # Other Models
+  mochi_1_i2v:
+    model_class: "MochiPipeline"
+    local_dir: "mochi-1"
+    model_dtype: "bf16"
+    vae_dtype: "bf16"
+
+  ltx_video:
+    model_class: "LTXPipeline"
+    local_dir: "LTX-Video"
+    model_dtype: "bf16"
+
+  hunyuanvideo:
+    model_class: "HunyuanVideoPipeline"
+    local_dir: "HunyuanVideo"
+    model_dtype: "bf16"

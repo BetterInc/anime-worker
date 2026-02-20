@@ -1,0 +1,75 @@
+# Anime Worker Configuration Example
+# Copy to ~/.anime-worker/config.toml and customize
+
+server_url = "https://api.anime-studio.example.com"
+worker_id = "your-worker-id-from-registration"
+api_key = "aw_your-api-key-here"
+worker_name = "My GPU Worker"
+
+# Optional: Custom paths
+# models_dir = "/path/to/models"  # Default: ~/.anime-worker/models
+# python_path = "python3"  # Auto-detected if not set
+# python_scripts_dir = "./python"  # Default: ./python relative to binary
+
+# Optional: Heartbeat interval
+# heartbeat_interval_secs = 30
+
+# Worker Constraints (Optional)
+# Configure which models this worker can/will run
+[constraints]
+
+# Maximum model size this worker will download (in GB)
+# Example: Set to 15 for small SSD, 100 for large storage
+# Default: No limit (download any size)
+max_model_size_gb = 30
+
+# Maximum total cache size (in GB)
+# Worker will refuse new downloads if cache exceeds this
+# Default: No limit
+max_total_cache_gb = 100
+
+# Specific models this worker supports (allowlist)
+# If set, worker ONLY accepts tasks for these models
+# Example: ["wan22_ti2v_5b", "mochi_preview_bf16"]
+# Default: Accept all models
+# supported_models = ["wan22_ti2v_5b"]
+
+# Models this worker explicitly excludes (blocklist)
+# Worker will refuse tasks for these models
+# Example: ["wan22_ti2v_14b"]  # Too large
+# Default: No exclusions
+# excluded_models = []
+
+# Minimum VRAM required (in GB)
+# Used for validation - worker should have at least this much VRAM
+# Default: Auto-detected from GPU
+# min_vram_gb = 16
+
+
+# ==============================================================================
+# Example Configurations for Different Scenarios
+# ==============================================================================
+
+# Scenario 1: Small Worker (Laptop with 16GB GPU)
+# ------------------------------------------------------------------------------
+# [constraints]
+# max_model_size_gb = 15  # Only small models
+# supported_models = ["wan22_ti2v_5b", "mochi_preview_bf16"]
+
+# Scenario 2: Large Worker (Server with 2x 24GB GPUs)
+# ------------------------------------------------------------------------------
+# [constraints]
+# max_model_size_gb = 100  # Can handle large models
+# # No supported_models = accepts all models
+
+# Scenario 3: Specialized Worker (Only runs one specific model)
+# ------------------------------------------------------------------------------
+# [constraints]
+# supported_models = ["wan22_ti2v_14b"]
+
+# Scenario 4: Storage-Constrained Worker
+# ------------------------------------------------------------------------------
+# [constraints]
+# max_model_size_gb = 30
+# max_total_cache_gb = 100  # Only cache 100GB total
+# excluded_models = ["huge_model_100gb"]
