@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::WorkerConstraints;
+
 // ---------------------------------------------------------------------------
 // Worker -> Server messages
 // ---------------------------------------------------------------------------
@@ -17,6 +19,8 @@ pub enum WorkerMessage {
         ram_total_gb: f64,
         platform: String,
         models_cached: Vec<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        constraints: Option<WorkerConstraints>,
     },
     Heartbeat {
         worker_id: String,
@@ -72,6 +76,7 @@ pub enum ServerMessage {
         pipeline_config: serde_json::Value,
         upload_url: String,
         last_frame_url: Option<String>,
+        input_video_url: Option<String>,
     },
     TaskCancel {
         task_id: String,

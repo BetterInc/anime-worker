@@ -14,7 +14,7 @@ mod upload;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -87,6 +87,15 @@ async fn main() -> anyhow::Result<()> {
             info!("Server: {}", cfg.server_url);
             info!("Models dir: {}", cfg.models_dir.display());
 
+            // Validate Python before connecting
+            match config::validate_python(&cfg.python_path) {
+                Ok(version) => info!("Python: {} at '{}'", version, cfg.python_path),
+                Err(msg) => {
+                    error!("{}", msg);
+                    anyhow::bail!("Cannot start without a working Python installation");
+                }
+            }
+
             // Ensure models dir exists
             std::fs::create_dir_all(&cfg.models_dir)?;
 
@@ -104,18 +113,31 @@ async fn main() -> anyhow::Result<()> {
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(config::config_file_path);
 
+            // Auto-discover Python
+            let python_path = match config::discover_python() {
+                Some(path) => {
+                    info!("Auto-discovered Python at '{}'", path);
+                    path
+                }
+                None => {
+                    info!("No Python found on PATH. Set python_path in config after installing Python 3.10+");
+                    "python3".to_string()
+                }
+            };
+
             let cfg = config::WorkerConfig {
                 server_url,
                 worker_id,
                 api_key,
                 worker_name: name,
                 models_dir: config::config_dir().join("models"),
-                python_path: "python3".to_string(),
+                python_path,
                 python_scripts_dir: std::env::current_exe()
                     .ok()
                     .and_then(|p| p.parent().map(|p| p.join("python")))
                     .unwrap_or_else(|| std::path::PathBuf::from("python")),
                 heartbeat_interval_secs: 30,
+                constraints: config::WorkerConstraints::default(),
             };
 
             cfg.save(&config_path)?;
@@ -127,9 +149,22 @@ async fn main() -> anyhow::Result<()> {
             println!("Platform: {}", hardware::platform());
             println!("RAM: {:.1} GB total, {:.1} GB free",
                 hardware::total_ram_gb(), hardware::free_ram_gb());
+
+            // Python check
+            match config::discover_python() {
+                Some(path) => {
+                    let version = config::validate_python(&path)
+                        .unwrap_or_else(|e| e);
+                    println!("Python: {} at '{}'", version, path);
+                }
+                None => {
+                    println!("Python: NOT FOUND — install Python 3.10+ and add to PATH");
+                }
+            }
+
             let gpus = hardware::detect_gpus();
             if gpus.is_empty() {
-                println!("No GPUs detected (nvidia-smi not found or no NVIDIA GPU)");
+                println!("GPUs: NOT FOUND (nvidia-smi not found or no NVIDIA GPU)");
             } else {
                 for (i, gpu) in gpus.iter().enumerate() {
                     println!(
@@ -159,27 +194,44 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::SetupPython => {
-            let config_path = cli
+            // Find any Python to bootstrap with
+            let bootstrap_python = config::discover_python()
+                .ok_or_else(|| anyhow::anyhow!(
+                    "No Python 3.10+ found on PATH.\n\
+                     Install Python first:\n  \
+                     - Linux: sudo apt install python3 python3-venv\n  \
+                     - Windows: https://www.python.org/downloads/"
+                ))?;
+
+            let scripts_dir = cli
                 .config
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(config::config_file_path);
+                .and_then(|p| config::WorkerConfig::load(&p).ok())
+                .map(|c| c.python_scripts_dir)
+                .unwrap_or_else(|| {
+                    std::env::current_exe()
+                        .ok()
+                        .and_then(|p| p.parent().map(|p| p.join("python")))
+                        .unwrap_or_else(|| std::path::PathBuf::from("python"))
+                });
 
-            let cfg = config::WorkerConfig::load(&config_path)?;
-            let setup_script = cfg.python_scripts_dir.join("setup_env.py");
+            let setup_script = scripts_dir.join("setup_env.py");
             if !setup_script.exists() {
                 anyhow::bail!(
-                    "setup_env.py not found at {}. Make sure python/ directory is next to the binary.",
+                    "setup_env.py not found at {}.\n\
+                     Make sure the python/ directory is next to the binary.",
                     setup_script.display()
                 );
             }
 
-            info!("Running Python environment setup...");
-            let status = std::process::Command::new("python3")
+            info!("Setting up Python environment using '{}'...", bootstrap_python);
+            let status = std::process::Command::new(&bootstrap_python)
                 .arg(&setup_script)
                 .status()?;
 
             if status.success() {
                 info!("Python environment setup complete");
+                info!("Update python_path in your config.toml if needed.");
             } else {
                 anyhow::bail!("Python setup failed with exit code {:?}", status.code());
             }

@@ -62,6 +62,7 @@ cargo build --release
 
 Config file: `~/.anime-worker/config.toml`
 
+**Basic Configuration:**
 ```toml
 server_url = "https://llm.pescheck.dev/api/anime"
 worker_id = "uuid-from-server"
@@ -71,6 +72,44 @@ models_dir = "/home/user/.anime-worker/models"
 python_path = "python3"
 heartbeat_interval_secs = 30
 ```
+
+**Worker Constraints (Optional):**
+
+Control which models this worker supports:
+
+```toml
+[constraints]
+# Maximum model size to download (GB)
+max_model_size_gb = 30
+
+# Maximum total cache size (GB)
+max_total_cache_gb = 100
+
+# Only accept tasks for these models (allowlist)
+# supported_models = ["wan22_ti2v_5b", "mochi_preview_bf16"]
+
+# Never accept tasks for these models (blocklist)
+# excluded_models = ["huge_model_100gb"]
+```
+
+**Examples:**
+
+```toml
+# Small worker (laptop with limited storage)
+[constraints]
+max_model_size_gb = 15
+supported_models = ["wan22_ti2v_5b"]
+
+# Large worker (server with lots of storage)
+[constraints]
+max_model_size_gb = 100  # Accept large models
+
+# Specialized worker (only runs one model)
+[constraints]
+supported_models = ["wan22_ti2v_14b"]
+```
+
+See `config.toml.example` for full documentation.
 
 ## Requirements
 

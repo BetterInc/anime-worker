@@ -64,16 +64,19 @@ def setup_pipeline(config, model_config=None):
     logger.info(f"PyTorch version: {torch.__version__}")
     logger.info(f"CUDA available: {torch.cuda.is_available()}")
 
+    # Allow CPU for testing (will be slow!)
     if not torch.cuda.is_available():
-        raise RuntimeError("CUDA not available -- GPU required")
-
-    gpus = detect_vram()
+        logger.warning("CUDA not available - using CPU (will be very slow!)")
+        gpus = []
+    else:
+        gpus = detect_vram()
     logger.info(f"CUDA version: {torch.version.cuda}")
     logger.info(f"GPUs detected: {len(gpus)}")
     for gpu_id, total_gb, free_gb in gpus:
         logger.info(f"  GPU {gpu_id}: {torch.cuda.get_device_properties(gpu_id).name} -- {total_gb:.1f} GB total, {free_gb:.1f} GB free")
 
-    pipeline_model_config = config['model']['wan22']
+    # Use 'current' key (new) or fallback to 'wan22' (old) for backwards compat
+    pipeline_model_config = config['model'].get('current', config['model'].get('wan22', {}))
     if model_config:
         pipeline_model_config = {**pipeline_model_config, **model_config}
     model_config = pipeline_model_config
@@ -98,18 +101,20 @@ def setup_pipeline(config, model_config=None):
     logger.info(f"Loading {model_path.name} (dtype={dtype_str} -> {dtype})")
 
     pipeline_classes = {}
-    for cls_name in ['WanPipeline', 'MochiPipeline', 'LTXPipeline', 'HunyuanVideoPipeline']:
+    for cls_name in ['WanPipeline', 'MochiPipeline', 'LTXPipeline', 'HunyuanVideoPipeline', 'TextToVideoSDPipeline']:
         cls = getattr(diffusers, cls_name, None)
         if cls:
             pipeline_classes[cls_name] = cls
     pipeline_class_name = model_config.get('model_class', 'WanPipeline')
+    logger.info(f"  Requested pipeline class: {pipeline_class_name}")
+    logger.info(f"  model_config keys: {list(model_config.keys())}")
     PipelineClass = pipeline_classes.get(pipeline_class_name)
     if PipelineClass is None:
         raise RuntimeError(
             f"Pipeline class '{pipeline_class_name}' not found in diffusers {diffusers.__version__}. "
             f"Available: {list(pipeline_classes.keys())}. Try upgrading diffusers."
         )
-    logger.info(f"  Pipeline class: {pipeline_class_name}")
+    logger.info(f"  Using pipeline class: {PipelineClass.__name__}")
 
     load_kwargs = {"torch_dtype": dtype, "use_safetensors": True, "low_cpu_mem_usage": True}
 
@@ -125,6 +130,15 @@ def setup_pipeline(config, model_config=None):
             str(model_path), subfolder="vae", torch_dtype=vae_dtype
         )
         logger.info(f"  VAE loaded (dtype={vae_dtype})")
+
+    # CPU-only mode if no GPUs
+    if not gpus:
+        logger.warning("No GPUs detected - loading model on CPU (will be VERY slow)")
+        pipe = PipelineClass.from_pretrained(str(model_path), **load_kwargs)
+        fix_text_encoder_weight_tying(pipe)
+        # Keep on CPU
+        logger.info("  Model loaded on CPU")
+        return pipe
 
     total_free_vram = sum(free_gb for _, _, free_gb in gpus)
     best_gpu = max(gpus, key=lambda g: g[2])

@@ -84,3 +84,58 @@ pub fn platform() -> &'static str {
         "unknown"
     }
 }
+
+/// Get available disk space in GB for a given path (cross-platform).
+/// Returns 0.0 if unable to determine.
+pub fn available_disk_space_gb(path: &std::path::Path) -> f64 {
+    use sysinfo::Disks;
+
+    let disks = Disks::new_with_refreshed_list();
+
+    // Find the disk that contains this path
+    let mut best_match: Option<&sysinfo::Disk> = None;
+    let mut best_match_len = 0;
+
+    for disk in &disks {
+        let mount_point = disk.mount_point();
+        if let Ok(rel) = path.strip_prefix(mount_point) {
+            let mount_len = mount_point.as_os_str().len();
+            if mount_len > best_match_len {
+                best_match = Some(disk);
+                best_match_len = mount_len;
+            }
+        } else if path.starts_with(mount_point) {
+            let mount_len = mount_point.as_os_str().len();
+            if mount_len > best_match_len {
+                best_match = Some(disk);
+                best_match_len = mount_len;
+            }
+        }
+    }
+
+    if let Some(disk) = best_match {
+        let available_bytes = disk.available_space();
+        return available_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    }
+
+    // Fallback: use first disk or 0
+    if let Some(disk) = disks.first() {
+        let available_bytes = disk.available_space();
+        available_bytes as f64 / (1024.0 * 1024.0 * 1024.0)
+    } else {
+        0.0
+    }
+}
+
+/// Calculate recommended max model size based on available disk space.
+/// Reserves 20% buffer to avoid filling the disk.
+pub fn recommended_max_model_size_gb(models_dir: &std::path::Path) -> f64 {
+    let available = available_disk_space_gb(models_dir);
+    if available > 10.0 {
+        // Use 80% of available space, leave 20% buffer
+        (available * 0.8).floor()
+    } else {
+        // If very little space, be more conservative
+        available.max(5.0) // Minimum 5GB
+    }
+}

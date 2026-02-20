@@ -41,6 +41,8 @@ pub struct InferenceJob {
     pub pipeline_config: serde_json::Value,
     pub output_dir: String,
     pub last_frame_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_video_path: Option<String>,
 }
 
 /// Handle to a running Python inference process.

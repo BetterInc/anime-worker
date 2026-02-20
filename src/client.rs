@@ -55,6 +55,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
         ram_total_gb: hardware::total_ram_gb(),
         platform: hardware::platform().to_string(),
         models_cached: cached.clone(),
+        constraints: Some(config.constraints.clone()),
     };
     let hello_json = serde_json::to_string(&hello)?;
     write.send(Message::Text(hello_json)).await?;
@@ -160,6 +161,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                         pipeline_config,
                         upload_url,
                         last_frame_url,
+                        input_video_url,
                     } => {
                         info!(
                             "Received task {} (scene {}, type {})",
@@ -188,6 +190,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                                 pipeline_config,
                                 &upload_url,
                                 last_frame_url.as_deref(),
+                                input_video_url.as_deref(),
                             )
                             .await;
 
@@ -258,9 +261,10 @@ async fn process_task<S>(
     pipeline_config: serde_json::Value,
     upload_url: &str,
     last_frame_url: Option<&str>,
+    input_video_url: Option<&str>,
 ) -> anyhow::Result<()>
 where
-    S: SinkExt<Message> + Unpin,
+    S: SinkExt<Message> + Unpin + Send + 'static,
     <S as futures_util::Sink<Message>>::Error: std::error::Error + Send + Sync + 'static,
 {
     // 1. Ensure model is cached
@@ -291,6 +295,7 @@ where
             &model_config.hf_repo,
             &config.models_dir,
             &model_config.local_dir,
+            &config.python_path,
             progress_cb,
         )
         .await?;
@@ -305,6 +310,21 @@ where
             .join("tmp")
             .join(format!("{}_lastframe.png", task_id));
         upload::download_file(&config.server_url, url, &config.api_key, &dest).await?;
+        Some(dest)
+    } else {
+        None
+    };
+
+    // 2b. Download input video if needed (for upscale tasks)
+    let input_video_path = if let Some(url) = input_video_url {
+        let dest = config
+            .models_dir
+            .parent()
+            .unwrap_or(&config.models_dir)
+            .join("tmp")
+            .join(format!("{}_input.mp4", task_id));
+        upload::download_file(&config.server_url, url, &config.api_key, &dest).await?;
+        info!("Downloaded input video to: {}", dest.display());
         Some(dest)
     } else {
         None
@@ -336,6 +356,7 @@ where
         pipeline_config,
         output_dir: output_dir.to_string_lossy().to_string(),
         last_frame_path: last_frame_path.map(|p| p.to_string_lossy().to_string()),
+        input_video_path: input_video_path.map(|p| p.to_string_lossy().to_string()),
     };
 
     let (mut output_rx, mut handle) =

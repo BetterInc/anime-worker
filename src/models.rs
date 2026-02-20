@@ -34,6 +34,7 @@ pub async fn download_model(
     hf_repo: &str,
     models_dir: &Path,
     local_dir: &str,
+    python_path: &str,
     progress_callback: impl Fn(f64, f64) + Send + 'static,
 ) -> anyhow::Result<PathBuf> {
     let model_path = models_dir.join(local_dir);
@@ -45,8 +46,23 @@ pub async fn download_model(
     let model_path_str = model_path.to_string_lossy().to_string();
     let hf_repo = hf_repo.to_string();
 
+    // Determine hf CLI path from python_path
+    // If python_path is /path/to/venv/bin/python, then hf is /path/to/venv/bin/hf
+    let python_pathbuf = PathBuf::from(python_path);
+    let hf_cli_path = if let Some(bin_dir) = python_pathbuf.parent() {
+        let hf = bin_dir.join("hf");
+        if hf.exists() {
+            hf.to_string_lossy().to_string()
+        } else {
+            "hf".to_string() // Fallback to PATH
+        }
+    } else {
+        "hf".to_string()
+    };
+
     let result = tokio::task::spawn_blocking(move || {
-        let mut cmd = Command::new("hf");
+        // Use hf CLI from venv
+        let mut cmd = Command::new(&hf_cli_path);
         cmd.args(["download", &hf_repo, "--local-dir", &model_path_str]);
 
         // Add HF token if available
