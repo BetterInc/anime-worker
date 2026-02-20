@@ -1,0 +1,46 @@
+[package]
+name = "anime-worker"
+version = "0.1.0"
+edition = "2021"
+description = "Distributed GPU worker for Anime Studio video generation"
+license = "MIT"
+
+[[bin]]
+name = "anime-worker"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime (includes process, io, fs, net, sync, time)
+tokio = { version = "1", features = ["full"] }
+
+# WebSocket client
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+
+# HTTP client (uploads + HuggingFace downloads)
+reqwest = { version = "0.12", features = ["multipart", "stream", "json", "native-tls"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# System info (cross-platform RAM/CPU)
+sysinfo = "0.32"
+
+# Platform-appropriate paths (~/.anime-worker)
+dirs = "6"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1"
+
+# Unix signal handling (for killing subprocesses)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

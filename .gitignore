@@ -1,0 +1,6 @@
+/target
+/python/venv
+/python/__pycache__
+/python/lib/__pycache__
+*.pyc
+.env
