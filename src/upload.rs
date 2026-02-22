@@ -68,11 +68,7 @@ pub async fn download_file(
     info!("Downloading {} to {}", url, dest.display());
 
     let client = reqwest::Client::new();
-    let resp = client
-        .get(&url)
-        .header("X-API-Key", api_key)
-        .send()
-        .await?;
+    let resp = client.get(&url).header("X-API-Key", api_key).send().await?;
 
     if !resp.status().is_success() {
         let status = resp.status();

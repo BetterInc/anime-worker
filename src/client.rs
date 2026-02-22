@@ -123,8 +123,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     });
 
     // Active inference handle (for cancellation)
-    let active_inference: Arc<Mutex<Option<runner::RunningInference>>> =
-        Arc::new(Mutex::new(None));
+    let active_inference: Arc<Mutex<Option<runner::RunningInference>>> = Arc::new(Mutex::new(None));
 
     // Message processing loop
     while let Some(msg_result) = read.next().await {
@@ -355,7 +354,7 @@ where
         scene,
         project,
         model_path,
-        model_config: serde_json::to_value(&model_config)?,  // Send FULL config, not just .extra
+        model_config: serde_json::to_value(&model_config)?, // Send FULL config, not just .extra
         pipeline_config,
         output_dir: output_dir.to_string_lossy().to_string(),
         last_frame_path: last_frame_path.map(|p| p.to_string_lossy().to_string()),
@@ -425,16 +424,10 @@ where
                 .get("scene_id")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
-            let lastframe =
-                output_dir.join(format!("scene_{:03}_lastframe.png", scene_id));
+            let lastframe = output_dir.join(format!("scene_{:03}_lastframe.png", scene_id));
             if lastframe.exists() {
-                upload::upload_lastframe(
-                    &config.server_url,
-                    task_id,
-                    &config.api_key,
-                    &lastframe,
-                )
-                .await?;
+                upload::upload_lastframe(&config.server_url, task_id, &config.api_key, &lastframe)
+                    .await?;
             }
         }
     }

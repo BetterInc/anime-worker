@@ -171,10 +171,7 @@ pub fn discover_python() -> Option<String> {
 
 /// Check if a Python executable exists and is version 3.10+.
 fn check_python_version(python: &str) -> bool {
-    match Command::new(python)
-        .args(["--version"])
-        .output()
-    {
+    match Command::new(python).args(["--version"]).output() {
         Ok(output) if output.status.success() => {
             let version_str = String::from_utf8_lossy(&output.stdout);
             // Parse "Python 3.12.1" -> (3, 12)

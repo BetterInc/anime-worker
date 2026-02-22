@@ -74,7 +74,11 @@ pub async fn spawn_inference(
         );
     }
 
-    info!("Spawning Python inference: {} {}", python_path, runner_script.display());
+    info!(
+        "Spawning Python inference: {} {}",
+        python_path,
+        runner_script.display()
+    );
 
     let mut child = Command::new(python_path)
         .arg(&runner_script)
@@ -151,10 +155,7 @@ pub async fn spawn_inference(
         }
     });
 
-    let handle = RunningInference {
-        child,
-        cancel_tx,
-    };
+    let handle = RunningInference { child, cancel_tx };
 
     Ok((output_rx, handle))
 }

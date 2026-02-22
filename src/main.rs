@@ -18,7 +18,11 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
-#[command(name = "anime-worker", version, about = "Distributed GPU worker for Anime Studio")]
+#[command(
+    name = "anime-worker",
+    version,
+    about = "Distributed GPU worker for Anime Studio"
+)]
 struct Cli {
     /// Path to config file (default: ~/.anime-worker/config.toml)
     #[arg(short, long)]
@@ -67,8 +71,7 @@ async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
@@ -147,14 +150,16 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Hardware => {
             println!("Platform: {}", hardware::platform());
-            println!("RAM: {:.1} GB total, {:.1} GB free",
-                hardware::total_ram_gb(), hardware::free_ram_gb());
+            println!(
+                "RAM: {:.1} GB total, {:.1} GB free",
+                hardware::total_ram_gb(),
+                hardware::free_ram_gb()
+            );
 
             // Python check
             match config::discover_python() {
                 Some(path) => {
-                    let version = config::validate_python(&path)
-                        .unwrap_or_else(|e| e);
+                    let version = config::validate_python(&path).unwrap_or_else(|e| e);
                     println!("Python: {} at '{}'", version, path);
                 }
                 None => {
@@ -195,13 +200,14 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::SetupPython => {
             // Find any Python to bootstrap with
-            let bootstrap_python = config::discover_python()
-                .ok_or_else(|| anyhow::anyhow!(
+            let bootstrap_python = config::discover_python().ok_or_else(|| {
+                anyhow::anyhow!(
                     "No Python 3.10+ found on PATH.\n\
                      Install Python first:\n  \
                      - Linux: sudo apt install python3 python3-venv\n  \
                      - Windows: https://www.python.org/downloads/"
-                ))?;
+                )
+            })?;
 
             let scripts_dir = cli
                 .config
@@ -224,7 +230,10 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
 
-            info!("Setting up Python environment using '{}'...", bootstrap_python);
+            info!(
+                "Setting up Python environment using '{}'...",
+                bootstrap_python
+            );
             let status = std::process::Command::new(&bootstrap_python)
                 .arg(&setup_script)
                 .status()?;

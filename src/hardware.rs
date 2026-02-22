@@ -126,4 +126,3 @@ pub fn available_disk_space_gb(path: &std::path::Path) -> f64 {
         0.0
     }
 }
-
