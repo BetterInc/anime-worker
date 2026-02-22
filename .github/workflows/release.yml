@@ -3,7 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
+      - "*.*.*"
 
 permissions:
   contents: write
@@ -22,10 +23,14 @@ jobs:
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: anime-worker
-          - name: windows-x86_64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact: anime-worker.exe
+          - name: macos-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: anime-worker
+          - name: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: anime-worker
     steps:
       - uses: actions/checkout@v4
 
@@ -49,15 +54,14 @@ jobs:
           cp README.md dist/
           cd dist && tar czf ../anime-worker-${{ matrix.name }}.tar.gz .
 
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/
           cp -r python dist/python
           cp README.md dist/
-          cd dist && 7z a ../anime-worker-${{ matrix.name }}.zip .
+          cd dist && tar czf ../anime-worker-${{ matrix.name }}.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -77,10 +81,20 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd artifacts
+          sha256sum anime-worker-linux-x86_64.tar.gz > SHA256SUMS
+          sha256sum anime-worker-macos-x86_64.tar.gz >> SHA256SUMS
+          sha256sum anime-worker-macos-arm64.tar.gz >> SHA256SUMS
+          cat SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
             artifacts/anime-worker-linux-x86_64.tar.gz
-            artifacts/anime-worker-windows-x86_64.zip
+            artifacts/anime-worker-macos-x86_64.tar.gz
+            artifacts/anime-worker-macos-arm64.tar.gz
+            artifacts/SHA256SUMS
