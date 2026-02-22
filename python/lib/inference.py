@@ -50,6 +50,14 @@ def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_i
 
     generator = torch.Generator(device='cpu').manual_seed(seed)
 
+    # Progress callback for real-time updates
+    total_steps = preview_config['num_inference_steps']
+
+    def progress_callback(step, timestep, latents):
+        progress = int((step / total_steps) * 100)
+        if step % max(1, total_steps // 10) == 0:  # Log every 10%
+            logger.info(f"  Generation progress: {progress}% (step {step}/{total_steps})")
+
     pipeline_kwargs = {
         "prompt": full_prompt,
         "negative_prompt": negative_prompt,
@@ -59,6 +67,8 @@ def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_i
         "num_inference_steps": preview_config['num_inference_steps'],
         "guidance_scale": preview_config['guidance_scale'],
         "generator": generator,
+        "callback": progress_callback,
+        "callback_steps": 1,
     }
 
     if preview_config.get('guidance_scale_2') is not None:

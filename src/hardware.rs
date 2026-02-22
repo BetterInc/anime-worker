@@ -98,7 +98,7 @@ pub fn available_disk_space_gb(path: &std::path::Path) -> f64 {
 
     for disk in &disks {
         let mount_point = disk.mount_point();
-        if let Ok(rel) = path.strip_prefix(mount_point) {
+        if let Ok(_rel) = path.strip_prefix(mount_point) {
             let mount_len = mount_point.as_os_str().len();
             if mount_len > best_match_len {
                 best_match = Some(disk);
@@ -127,15 +127,3 @@ pub fn available_disk_space_gb(path: &std::path::Path) -> f64 {
     }
 }
 
-/// Calculate recommended max model size based on available disk space.
-/// Reserves 20% buffer to avoid filling the disk.
-pub fn recommended_max_model_size_gb(models_dir: &std::path::Path) -> f64 {
-    let available = available_disk_space_gb(models_dir);
-    if available > 10.0 {
-        // Use 80% of available space, leave 20% buffer
-        (available * 0.8).floor()
-    } else {
-        // If very little space, be more conservative
-        available.max(5.0) // Minimum 5GB
-    }
-}

@@ -72,8 +72,8 @@ pub enum ServerMessage {
         scene: serde_json::Value,
         project: serde_json::Value,
         model_id: String,
-        model_config: ModelConfig,
-        pipeline_config: serde_json::Value,
+        model_config: Box<ModelConfig>,
+        pipeline_config: Box<serde_json::Value>,
         upload_url: String,
         last_frame_url: Option<String>,
         input_video_url: Option<String>,
@@ -82,9 +82,7 @@ pub enum ServerMessage {
         task_id: String,
         reason: String,
     },
-    TasksAvailable {
-        model_id: Option<String>,
-    },
+    TasksAvailable {},
     HeartbeatAck {},
     Error {
         message: String,

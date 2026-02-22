@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 use tokio::time;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -186,8 +186,8 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                                 scene,
                                 project,
                                 &model_id,
-                                model_config,
-                                pipeline_config,
+                                *model_config,
+                                *pipeline_config,
                                 &upload_url,
                                 last_frame_url.as_deref(),
                                 input_video_url.as_deref(),

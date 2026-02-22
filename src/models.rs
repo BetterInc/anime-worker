@@ -104,7 +104,7 @@ pub async fn download_model(
         "hf".to_string()
     };
 
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         // Use hf CLI from venv
         let mut cmd = Command::new(&hf_cli_path);
         cmd.args(["download", &hf_repo, "--local-dir", &model_path_str]);
