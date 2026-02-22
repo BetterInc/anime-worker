@@ -23,6 +23,10 @@ jobs:
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: anime-worker
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: anime-worker.exe
           - name: macos-x86_64
             os: macos-latest
             target: x86_64-apple-darwin
@@ -53,6 +57,16 @@ jobs:
           cp -r python dist/python
           cp README.md dist/
           cd dist && tar czf ../anime-worker-${{ matrix.name }}.tar.gz .
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/
+          cp -r python dist/python
+          cp README.md dist/
+          cd dist && 7z a ../anime-worker-${{ matrix.name }}.zip .
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -85,6 +99,7 @@ jobs:
         run: |
           cd artifacts
           sha256sum anime-worker-linux-x86_64.tar.gz > SHA256SUMS
+          sha256sum anime-worker-windows-x86_64.zip >> SHA256SUMS
           sha256sum anime-worker-macos-x86_64.tar.gz >> SHA256SUMS
           sha256sum anime-worker-macos-arm64.tar.gz >> SHA256SUMS
           cat SHA256SUMS
@@ -95,6 +110,7 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/anime-worker-linux-x86_64.tar.gz
+            artifacts/anime-worker-windows-x86_64.zip
             artifacts/anime-worker-macos-x86_64.tar.gz
             artifacts/anime-worker-macos-arm64.tar.gz
             artifacts/SHA256SUMS
