@@ -285,9 +285,12 @@ where
             // Fire-and-forget (blocking context)
             if let Ok(json) = serde_json::to_string(&msg) {
                 let write = write_clone.clone();
-                tokio::spawn(async move {
-                    let _ = write.lock().await.send(Message::Text(json)).await;
-                });
+                // Use Handle::current() to spawn from blocking context
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    handle.spawn(async move {
+                        let _ = write.lock().await.send(Message::Text(json)).await;
+                    });
+                }
             }
         };
 
@@ -352,7 +355,7 @@ where
         scene,
         project,
         model_path,
-        model_config: serde_json::to_value(&model_config.extra)?,
+        model_config: serde_json::to_value(&model_config)?,  // Send FULL config, not just .extra
         pipeline_config,
         output_dir: output_dir.to_string_lossy().to_string(),
         last_frame_path: last_frame_path.map(|p| p.to_string_lossy().to_string()),

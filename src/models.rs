@@ -12,18 +12,62 @@ pub fn is_model_cached(models_dir: &Path, local_dir: &str) -> bool {
 }
 
 /// List all cached model directories (those with model_index.json).
+/// Returns model IDs (not local directory names) by mapping via model_configs.yaml
 pub fn list_cached_models(models_dir: &Path) -> Vec<String> {
-    let mut cached = Vec::new();
+    let mut local_dirs = Vec::new();
     if let Ok(entries) = std::fs::read_dir(models_dir) {
         for entry in entries.flatten() {
             if entry.path().join("model_index.json").exists() {
                 if let Some(name) = entry.file_name().to_str() {
-                    cached.push(name.to_string());
+                    local_dirs.push(name.to_string());
                 }
             }
         }
     }
-    cached
+
+    // Map local directories to model IDs using model_configs.yaml
+    map_local_dirs_to_model_ids(&local_dirs)
+}
+
+/// Map local directory names to model IDs using model_configs.yaml
+fn map_local_dirs_to_model_ids(local_dirs: &[String]) -> Vec<String> {
+    use std::collections::HashMap;
+
+    // Try to load model_configs.yaml from python dir
+    let config_paths = vec![
+        PathBuf::from("/app/python/model_configs.yaml"),
+        PathBuf::from("./python/model_configs.yaml"),
+        PathBuf::from("../python/model_configs.yaml"),
+    ];
+
+    for config_path in config_paths {
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content) {
+                if let Some(models) = config.get("models").and_then(|m| m.as_mapping()) {
+                    // Build reverse map: local_dir -> model_id
+                    let mut dir_to_id: HashMap<String, String> = HashMap::new();
+                    for (model_id, model_data) in models {
+                        if let (Some(id_str), Some(local_dir)) = (
+                            model_id.as_str(),
+                            model_data.get("local_dir").and_then(|v| v.as_str()),
+                        ) {
+                            dir_to_id.insert(local_dir.to_string(), id_str.to_string());
+                        }
+                    }
+
+                    // Map the local dirs to model IDs
+                    return local_dirs
+                        .iter()
+                        .filter_map(|dir| dir_to_id.get(dir).cloned())
+                        .collect();
+                }
+            }
+        }
+    }
+
+    // Fallback: return local dirs if mapping fails
+    warn!("Failed to load model_configs.yaml, reporting local dirs instead of model IDs");
+    local_dirs.to_vec()
 }
 
 /// Download a model from HuggingFace using the `hf` CLI tool.

@@ -1,0 +1,10 @@
+server_url = "http://api:8000"
+worker_id = "42676a86-383b-4ae4-ab29-a4130a0ae988"
+api_key = "aw_CHM552Vi4XKTVDbLCPejoirkbFgtsSCWfgUZYgDUNy4"
+worker_name = "Docker Test Worker"
+models_dir = "/app/models"
+python_path = "python3"
+heartbeat_interval_secs = 30
+
+[constraints]
+max_model_size_gb = 30

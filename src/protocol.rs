@@ -102,7 +102,7 @@ pub struct GpuInfo {
     pub vram_free_mb: u64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelConfig {
     pub hf_repo: String,
     pub local_dir: String,
