@@ -31,14 +31,14 @@ def main():
 
     print("Installing PyTorch (CUDA)...")
     subprocess.check_call([
-        pip, "install",
+        python, "-m", "pip", "install",
         "torch", "torchvision", "torchaudio",
         "--index-url", "https://download.pytorch.org/whl/cu124",
     ])
 
     if REQUIREMENTS.exists():
         print(f"Installing requirements from {REQUIREMENTS}...")
-        subprocess.check_call([pip, "install", "-r", str(REQUIREMENTS)])
+        subprocess.check_call([python, "-m", "pip", "install", "-r", str(REQUIREMENTS)])
 
     print("\nSetup complete!")
     print(f"Python: {python}")
