@@ -9,7 +9,6 @@ Pillow
 numpy
 opencv-python-headless
 xformers
-huggingface_hub[cli]>=0.20.0
 
 # Upscaling dependencies
 realesrgan>=0.3.0
