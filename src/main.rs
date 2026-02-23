@@ -84,23 +84,19 @@ async fn main() -> anyhow::Result<()> {
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(config::config_file_path);
 
-            let cfg = config::WorkerConfig::load(&config_path)?;
+            let mut cfg = config::WorkerConfig::load(&config_path)?;
             info!("Loaded config from {}", config_path.display());
             info!("Worker: {} ({})", cfg.worker_name, &cfg.worker_id[..8]);
             info!("Server: {}", cfg.server_url);
             info!("Models dir: {}", cfg.models_dir.display());
 
-            // Validate Python before connecting
-            match config::validate_python(&cfg.python_path) {
-                Ok(version) => info!("Python: {} at '{}'", version, cfg.python_path),
-                Err(msg) => {
-                    error!("{}", msg);
-                    anyhow::bail!("Cannot start without a working Python installation");
-                }
-            }
-
             // Auto-setup Python environment if needed
             let venv_path = cfg.python_scripts_dir.join("venv");
+            let venv_python = if cfg!(windows) {
+                venv_path.join("Scripts").join("python.exe")
+            } else {
+                venv_path.join("bin").join("python")
+            };
             if !venv_path.exists() {
                 info!(
                     "Python virtual environment not found at {}",
@@ -129,10 +125,35 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 info!("Python environment setup complete!");
-                info!(
-                    "Note: Update config.toml python_path to: {}/bin/python",
-                    venv_path.display()
-                );
+            }
+
+            // Auto-configure to use venv Python if it exists (unless user has custom path)
+            if venv_python.exists() {
+                let venv_python_str = venv_python.to_string_lossy().to_string();
+
+                // Only auto-configure if:
+                // 1. Config points to default "python3" or doesn't exist
+                // 2. Config points to non-existent Python
+                let should_auto_configure = cfg.python_path == "python3"
+                    || cfg.python_path == "python"
+                    || !std::path::Path::new(&cfg.python_path).exists();
+
+                if should_auto_configure && cfg.python_path != venv_python_str {
+                    info!("Auto-configuring to use venv Python: {}", venv_python_str);
+                    cfg.python_path = venv_python_str.clone();
+                    cfg.save(&config_path)?;
+                } else if !should_auto_configure {
+                    info!("Using custom Python from config: {}", cfg.python_path);
+                }
+            }
+
+            // Validate Python before connecting
+            match config::validate_python(&cfg.python_path) {
+                Ok(version) => info!("Python: {} at '{}'", version, cfg.python_path),
+                Err(msg) => {
+                    error!("{}", msg);
+                    anyhow::bail!("Cannot start without a working Python installation");
+                }
             }
 
             // Ensure models dir exists
