@@ -297,7 +297,6 @@ where
             &model_config.hf_repo,
             &config.models_dir,
             &model_config.local_dir,
-            &config.python_path,
             progress_cb,
         )
         .await?;

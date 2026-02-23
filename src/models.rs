@@ -1,7 +1,7 @@
 //! HuggingFace model downloading and cache management.
+//! Pure Rust implementation - no Python dependencies required.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tracing::{info, warn};
 
@@ -70,15 +70,14 @@ fn map_local_dirs_to_model_ids(local_dirs: &[String]) -> Vec<String> {
     local_dirs.to_vec()
 }
 
-/// Download a model from HuggingFace using the `hf` CLI tool.
+/// Download a model from HuggingFace using pure Rust (no Python CLI needed).
 ///
 /// Returns the local path on success.
-/// Progress is reported via the callback (downloaded_bytes, total_bytes_estimate).
+/// Progress is reported via the callback (downloaded_gb, total_gb_estimate).
 pub async fn download_model(
     hf_repo: &str,
     models_dir: &Path,
     local_dir: &str,
-    python_path: &str,
     progress_callback: impl Fn(f64, f64) + Send + 'static,
 ) -> anyhow::Result<PathBuf> {
     let model_path = models_dir.join(local_dir);
@@ -86,63 +85,49 @@ pub async fn download_model(
 
     info!("Downloading model {} to {}", hf_repo, model_path.display());
 
-    // Use hf CLI for downloading (handles resume, auth, etc.)
-    let model_path_str = model_path.to_string_lossy().to_string();
     let hf_repo = hf_repo.to_string();
+    let model_path_str = model_path.to_string_lossy().to_string();
 
-    // Determine hf CLI path from python_path
-    // If python_path is /path/to/venv/bin/python, then hf is /path/to/venv/bin/hf
-    let python_pathbuf = PathBuf::from(python_path);
-    let hf_cli_path = if let Some(bin_dir) = python_pathbuf.parent() {
-        let hf = bin_dir.join("hf");
-        if hf.exists() {
-            hf.to_string_lossy().to_string()
-        } else {
-            "hf".to_string() // Fallback to PATH
-        }
-    } else {
-        "hf".to_string()
-    };
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+        use hf_hub::api::sync::Api;
 
-    tokio::task::spawn_blocking(move || {
-        // Use hf CLI from venv
-        let mut cmd = Command::new(&hf_cli_path);
-        cmd.args(["download", &hf_repo, "--local-dir", &model_path_str]);
+        // Create HF API client
+        let api = Api::new().map_err(|e| anyhow::anyhow!("Failed to create HF API client: {}", e))?;
 
-        // Add HF token if available
-        if let Ok(token) = std::env::var("HF_TOKEN") {
-            if !token.is_empty() {
-                cmd.args(["--token", &token]);
+        let repo = api.model(hf_repo.clone());
+
+        // Get list of files in the repo
+        let files = repo.info()
+            .map_err(|e| anyhow::anyhow!("Failed to get repo info: {}", e))?
+            .siblings;
+
+        info!("Found {} files in {}", files.len(), hf_repo);
+
+        // Download all files
+        let model_path_buf = PathBuf::from(&model_path_str);
+        for file in files {
+            let filename = &file.rfilename;
+            info!("Downloading: {}", filename);
+
+            // Download file
+            let downloaded = repo.get(filename)
+                .map_err(|e| anyhow::anyhow!("Failed to download {}: {}", filename, e))?;
+
+            // Copy to destination
+            let dest = model_path_buf.join(filename);
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(&downloaded, &dest)?;
+
+            // Report progress (approximate - based on downloaded files)
+            if let Ok(size) = dir_size_bytes(&model_path_buf) {
+                let gb = size as f64 / (1024.0 * 1024.0 * 1024.0);
+                progress_callback(gb, 0.0);
             }
         }
 
-        // Spawn a monitor thread that checks disk size periodically
-        let monitor_path = PathBuf::from(&model_path_str);
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let stop_clone = stop.clone();
-
-        let monitor = std::thread::spawn(move || {
-            while !stop_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                std::thread::sleep(std::time::Duration::from_secs(5));
-                if let Ok(size) = dir_size_bytes(&monitor_path) {
-                    let gb = size as f64 / (1024.0 * 1024.0 * 1024.0);
-                    progress_callback(gb, 0.0); // total unknown from disk monitoring
-                }
-            }
-        });
-
-        let output = cmd.output();
-        stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        let _ = monitor.join();
-
-        match output {
-            Ok(out) if out.status.success() => Ok(()),
-            Ok(out) => {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                anyhow::bail!("hf download failed: {}", stderr);
-            }
-            Err(e) => anyhow::bail!("Failed to run hf CLI: {}", e),
-        }
+        Ok(())
     })
     .await??;
 
@@ -157,10 +142,10 @@ fn dir_size_bytes(path: &Path) -> std::io::Result<u64> {
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
             let metadata = entry.metadata()?;
-            if metadata.is_dir() {
-                total += dir_size_bytes(&entry.path())?;
-            } else {
+            if metadata.is_file() {
                 total += metadata.len();
+            } else if metadata.is_dir() {
+                total += dir_size_bytes(&entry.path())?;
             }
         }
     }

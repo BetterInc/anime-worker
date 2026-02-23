@@ -20,6 +20,9 @@ futures-util = "0.3"
 # HTTP client (uploads + HuggingFace downloads)
 reqwest = { version = "0.12", features = ["multipart", "stream", "json", "native-tls"] }
 
+# HuggingFace Hub client (pure Rust, no Python needed)
+hf-hub = "0.3"
+
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
