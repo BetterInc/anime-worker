@@ -271,7 +271,8 @@ mod tests {
     #[test]
     fn test_config_load_and_save() {
         // Create a temporary directory
-        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("anime-worker-test-{}", std::process::id()));
         std::fs::create_dir_all(&temp_dir).unwrap();
 
         let config_path = temp_dir.join("config.toml");
@@ -301,7 +302,10 @@ mod tests {
         assert_eq!(loaded_config.worker_id, config.worker_id);
         assert_eq!(loaded_config.api_key, config.api_key);
         assert_eq!(loaded_config.worker_name, config.worker_name);
-        assert_eq!(loaded_config.heartbeat_interval_secs, config.heartbeat_interval_secs);
+        assert_eq!(
+            loaded_config.heartbeat_interval_secs,
+            config.heartbeat_interval_secs
+        );
 
         // Cleanup
         std::fs::remove_dir_all(&temp_dir).ok();
@@ -310,7 +314,8 @@ mod tests {
     #[test]
     fn test_config_with_minimal_fields() {
         // Test loading a config with only required fields
-        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-minimal-{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("anime-worker-test-minimal-{}", std::process::id()));
         std::fs::create_dir_all(&temp_dir).unwrap();
         let config_path = temp_dir.join("config.toml");
 
@@ -336,7 +341,8 @@ worker_name = "Minimal Worker"
     fn test_config_from_exe_directory() {
         // Test that we can load config from the same directory as the executable
         // This simulates the CI test scenario
-        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-exe-dir-{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("anime-worker-test-exe-dir-{}", std::process::id()));
         std::fs::create_dir_all(&temp_dir).unwrap();
 
         // Create config in temp directory
@@ -368,7 +374,8 @@ heartbeat_interval_secs = 60
 
     #[test]
     fn test_invalid_config_fails() {
-        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-invalid-{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("anime-worker-test-invalid-{}", std::process::id()));
         std::fs::create_dir_all(&temp_dir).unwrap();
         let config_path = temp_dir.join("config.toml");
 
@@ -385,7 +392,8 @@ heartbeat_interval_secs = 60
 
     #[test]
     fn test_missing_required_fields_fails() {
-        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-missing-{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("anime-worker-test-missing-{}", std::process::id()));
         std::fs::create_dir_all(&temp_dir).unwrap();
         let config_path = temp_dir.join("config.toml");
 
@@ -398,7 +406,10 @@ server_url = "https://test.example.com"
 
         // Should fail to load
         let result = WorkerConfig::load(&config_path);
-        assert!(result.is_err(), "Config missing required fields should fail to load");
+        assert!(
+            result.is_err(),
+            "Config missing required fields should fail to load"
+        );
 
         // Cleanup
         std::fs::remove_dir_all(&temp_dir).ok();
