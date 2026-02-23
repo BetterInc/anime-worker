@@ -105,10 +105,21 @@ pub async fn download_model(
 
         info!("Found {} files in {}", files.len(), hf_repo);
 
-        // Download all files
+        // Download essential files only (skip docs/assets that may have download issues)
         let model_path_buf = PathBuf::from(&model_path_str);
         for file in files {
             let filename = &file.rfilename;
+
+            // Skip non-essential files (documentation, assets, examples)
+            if filename == ".gitattributes"
+                || filename == "README.md"
+                || filename.starts_with("assets/")
+                || filename.starts_with("examples/")
+            {
+                info!("Skipping non-essential file: {}", filename);
+                continue;
+            }
+
             info!("Downloading: {}", filename);
 
             // Download file
