@@ -90,17 +90,19 @@ pub async fn download_model(
 
     tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         // Use huggingface-cli download for reliability with large files
-        let python_path = std::env::current_dir()?
-            .join("python/venv/bin/python");
+        let python_path = std::env::current_dir()?.join("python/venv/bin/python");
 
         if !python_path.exists() {
-            return Err(anyhow::anyhow!("Python venv not found at {}", python_path.display()));
+            return Err(anyhow::anyhow!(
+                "Python venv not found at {}",
+                python_path.display()
+            ));
         }
 
         info!("Using Python HuggingFace Hub to download (more reliable for large files)");
 
         let output = std::process::Command::new(&python_path)
-            .args(&[
+            .args([
                 "-c",
                 &format!(
                     "from huggingface_hub import snapshot_download; \
