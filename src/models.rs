@@ -70,7 +70,7 @@ fn map_local_dirs_to_model_ids(local_dirs: &[String]) -> Vec<String> {
     local_dirs.to_vec()
 }
 
-/// Download a model from HuggingFace using pure Rust (no Python CLI needed).
+/// Download a model from HuggingFace using Python CLI (more reliable for large files).
 ///
 /// Returns the local path on success.
 /// Progress is reported via the callback (downloaded_gb, total_gb_estimate).
@@ -89,56 +89,44 @@ pub async fn download_model(
     let model_path_str = model_path.to_string_lossy().to_string();
 
     tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-        use hf_hub::api::sync::Api;
+        // Use huggingface-cli download for reliability with large files
+        let python_path = std::env::current_dir()?
+            .join("python/venv/bin/python");
 
-        // Create HF API client
-        let api =
-            Api::new().map_err(|e| anyhow::anyhow!("Failed to create HF API client: {}", e))?;
+        if !python_path.exists() {
+            return Err(anyhow::anyhow!("Python venv not found at {}", python_path.display()));
+        }
 
-        let repo = api.model(hf_repo.clone());
+        info!("Using Python HuggingFace Hub to download (more reliable for large files)");
 
-        // Get list of files in the repo
-        let files = repo
-            .info()
-            .map_err(|e| anyhow::anyhow!("Failed to get repo info: {}", e))?
-            .siblings;
+        let output = std::process::Command::new(&python_path)
+            .args(&[
+                "-c",
+                &format!(
+                    "from huggingface_hub import snapshot_download; \
+                     snapshot_download(\
+                         repo_id='{}', \
+                         local_dir='{}', \
+                         local_dir_use_symlinks=False, \
+                         resume_download=True\
+                     )",
+                    hf_repo, model_path_str
+                ),
+            ])
+            .output()
+            .map_err(|e| anyhow::anyhow!("Failed to spawn Python process: {}", e))?;
 
-        info!("Found {} files in {}", files.len(), hf_repo);
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("Model download failed: {}", stderr));
+        }
 
-        // Download essential files only (skip docs/assets that may have download issues)
-        let model_path_buf = PathBuf::from(&model_path_str);
-        for file in files {
-            let filename = &file.rfilename;
+        info!("Model downloaded successfully");
 
-            // Skip non-essential files (documentation, assets, examples)
-            if filename == ".gitattributes"
-                || filename == "README.md"
-                || filename.starts_with("assets/")
-                || filename.starts_with("examples/")
-            {
-                info!("Skipping non-essential file: {}", filename);
-                continue;
-            }
-
-            info!("Downloading: {}", filename);
-
-            // Download file
-            let downloaded = repo
-                .get(filename)
-                .map_err(|e| anyhow::anyhow!("Failed to download {}: {}", filename, e))?;
-
-            // Copy to destination
-            let dest = model_path_buf.join(filename);
-            if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::copy(&downloaded, &dest)?;
-
-            // Report progress (approximate - based on downloaded files)
-            if let Ok(size) = dir_size_bytes(&model_path_buf) {
-                let gb = size as f64 / (1024.0 * 1024.0 * 1024.0);
-                progress_callback(gb, 0.0);
-            }
+        // Report final size
+        if let Ok(size) = dir_size_bytes(&PathBuf::from(&model_path_str)) {
+            let gb = size as f64 / (1024.0 * 1024.0 * 1024.0);
+            progress_callback(gb, 0.0);
         }
 
         Ok(())
