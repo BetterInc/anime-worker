@@ -262,3 +262,145 @@ impl WorkerConfig {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_config_load_and_save() {
+        // Create a temporary directory
+        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let config_path = temp_dir.join("config.toml");
+
+        // Create a test config
+        let config = WorkerConfig {
+            server_url: "https://test.example.com/api/anime".to_string(),
+            worker_id: "test-worker-id-12345".to_string(),
+            api_key: "test-api-key-xyz".to_string(),
+            worker_name: "Test Worker".to_string(),
+            models_dir: temp_dir.join("models"),
+            python_path: "python3".to_string(),
+            python_scripts_dir: temp_dir.join("python"),
+            heartbeat_interval_secs: 30,
+            constraints: WorkerConstraints::default(),
+        };
+
+        // Save config
+        config.save(&config_path).unwrap();
+        assert!(config_path.exists(), "Config file should be created");
+
+        // Load config back
+        let loaded_config = WorkerConfig::load(&config_path).unwrap();
+
+        // Verify fields match (except auto-detected ones)
+        assert_eq!(loaded_config.server_url, config.server_url);
+        assert_eq!(loaded_config.worker_id, config.worker_id);
+        assert_eq!(loaded_config.api_key, config.api_key);
+        assert_eq!(loaded_config.worker_name, config.worker_name);
+        assert_eq!(loaded_config.heartbeat_interval_secs, config.heartbeat_interval_secs);
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_config_with_minimal_fields() {
+        // Test loading a config with only required fields
+        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-minimal-{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("config.toml");
+
+        // Write minimal config
+        let minimal_toml = r#"
+server_url = "https://test.example.com/api/anime"
+worker_id = "test-worker-id"
+api_key = "test-api-key"
+worker_name = "Minimal Worker"
+"#;
+        std::fs::write(&config_path, minimal_toml).unwrap();
+
+        // Should load successfully with defaults
+        let config = WorkerConfig::load(&config_path).unwrap();
+        assert_eq!(config.server_url, "https://test.example.com/api/anime");
+        assert_eq!(config.heartbeat_interval_secs, 30); // default
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_config_from_exe_directory() {
+        // Test that we can load config from the same directory as the executable
+        // This simulates the CI test scenario
+        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-exe-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Create config in temp directory
+        let config_path = temp_dir.join("config.toml");
+        let test_config = r#"
+server_url = "https://localhost:8080/api/anime"
+worker_id = "local-test-worker"
+api_key = "local-test-key"
+worker_name = "Local Test Worker"
+heartbeat_interval_secs = 60
+"#;
+        let mut file = std::fs::File::create(&config_path).unwrap();
+        file.write_all(test_config.as_bytes()).unwrap();
+        drop(file);
+
+        // Load the config
+        let config = WorkerConfig::load(&config_path).unwrap();
+
+        // Verify it loaded correctly
+        assert_eq!(config.server_url, "https://localhost:8080/api/anime");
+        assert_eq!(config.worker_id, "local-test-worker");
+        assert_eq!(config.api_key, "local-test-key");
+        assert_eq!(config.worker_name, "Local Test Worker");
+        assert_eq!(config.heartbeat_interval_secs, 60);
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_invalid_config_fails() {
+        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-invalid-{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("config.toml");
+
+        // Write invalid TOML
+        std::fs::write(&config_path, "this is not valid toml [[[]").unwrap();
+
+        // Should fail to load
+        let result = WorkerConfig::load(&config_path);
+        assert!(result.is_err(), "Invalid config should fail to load");
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_missing_required_fields_fails() {
+        let temp_dir = std::env::temp_dir().join(format!("anime-worker-test-missing-{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("config.toml");
+
+        // Write config missing required fields
+        let incomplete_toml = r#"
+server_url = "https://test.example.com"
+# Missing worker_id, api_key, worker_name
+"#;
+        std::fs::write(&config_path, incomplete_toml).unwrap();
+
+        // Should fail to load
+        let result = WorkerConfig::load(&config_path);
+        assert!(result.is_err(), "Config missing required fields should fail to load");
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+}
