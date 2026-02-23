@@ -92,12 +92,14 @@ pub async fn download_model(
         use hf_hub::api::sync::Api;
 
         // Create HF API client
-        let api = Api::new().map_err(|e| anyhow::anyhow!("Failed to create HF API client: {}", e))?;
+        let api =
+            Api::new().map_err(|e| anyhow::anyhow!("Failed to create HF API client: {}", e))?;
 
         let repo = api.model(hf_repo.clone());
 
         // Get list of files in the repo
-        let files = repo.info()
+        let files = repo
+            .info()
             .map_err(|e| anyhow::anyhow!("Failed to get repo info: {}", e))?
             .siblings;
 
@@ -110,7 +112,8 @@ pub async fn download_model(
             info!("Downloading: {}", filename);
 
             // Download file
-            let downloaded = repo.get(filename)
+            let downloaded = repo
+                .get(filename)
                 .map_err(|e| anyhow::anyhow!("Failed to download {}: {}", filename, e))?;
 
             // Copy to destination
