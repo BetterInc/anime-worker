@@ -21,7 +21,7 @@ futures-util = "0.3"
 reqwest = { version = "0.12", features = ["multipart", "stream", "json", "native-tls"] }
 
 # HuggingFace Hub client (pure Rust, no Python needed)
-hf-hub = "0.3"
+hf-hub = "0.5"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
