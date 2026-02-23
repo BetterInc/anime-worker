@@ -99,6 +99,42 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
+            // Auto-setup Python environment if needed
+            let venv_path = cfg.python_scripts_dir.join("venv");
+            if !venv_path.exists() {
+                info!(
+                    "Python virtual environment not found at {}",
+                    venv_path.display()
+                );
+                info!("Running automatic Python setup...");
+
+                let bootstrap_python = config::discover_python()
+                    .ok_or_else(|| anyhow::anyhow!("No Python found on PATH for setup"))?;
+
+                let setup_script = cfg.python_scripts_dir.join("setup_env.py");
+                if !setup_script.exists() {
+                    anyhow::bail!(
+                        "setup_env.py not found at {}. Ensure python/ directory is properly deployed.",
+                        setup_script.display()
+                    );
+                }
+
+                info!("This will install PyTorch, diffusers, and other dependencies (may take a few minutes)...");
+                let status = std::process::Command::new(&bootstrap_python)
+                    .arg(&setup_script)
+                    .status()?;
+
+                if !status.success() {
+                    anyhow::bail!("Python setup failed. Run 'anime-worker setup-python' manually for details.");
+                }
+
+                info!("Python environment setup complete!");
+                info!(
+                    "Note: Update config.toml python_path to: {}/bin/python",
+                    venv_path.display()
+                );
+            }
+
             // Ensure models dir exists
             std::fs::create_dir_all(&cfg.models_dir)?;
 
