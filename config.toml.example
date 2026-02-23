@@ -1,7 +1,7 @@
 # Anime Worker Configuration Example
 # Copy to ~/.anime-worker/config.toml and customize
 
-server_url = "https://api.anime-studio.example.com"
+server_url = "https://animestudiocontaineryaw5gajb-anime-api.functions.fnc.nl-ams.scw.cloud"
 worker_id = "your-worker-id-from-registration"
 api_key = "aw_your-api-key-here"
 worker_name = "My GPU Worker"
