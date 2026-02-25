@@ -13,9 +13,59 @@ use tracing::{error, info, warn};
 use crate::config::WorkerConfig;
 use crate::hardware;
 use crate::models;
-use crate::protocol::{ServerMessage, WorkerMessage};
+use crate::protocol::{CpuStats, DiskStats, HardwareStats, RamStats, ServerMessage, WorkerMessage};
 use crate::runner::{self, InferenceJob, PythonOutput};
 use crate::upload;
+
+/// Build hardware stats snapshot from current system state.
+fn build_hardware_stats(config: &WorkerConfig) -> HardwareStats {
+    let gpus = hardware::detect_gpus();
+
+    // Apply resource limits from constraints (if configured)
+    // If no limits set, use 90% of actual hardware (10% buffer for system)
+    let cpu_cores = config
+        .constraints
+        .cpu_limit
+        .unwrap_or_else(|| (hardware::cpu_cores() as f64 * 0.9).max(1.0) as usize);
+    let ram_total_gb = config
+        .constraints
+        .ram_limit_gb
+        .unwrap_or_else(|| hardware::total_ram_gb() * 0.9);
+    let ram_free_gb = hardware::free_ram_gb();
+    let ram_used_gb = ram_total_gb - ram_free_gb;
+
+    let disk_total_gb = hardware::total_disk_space_gb(&config.models_dir);
+    let disk_free_gb = config
+        .constraints
+        .disk_limit_gb
+        .unwrap_or_else(|| hardware::available_disk_space_gb(&config.models_dir) * 0.9);
+    let disk_used_gb = disk_total_gb - disk_free_gb;
+
+    let cpu_usage_percent = hardware::cpu_usage_percent();
+
+    HardwareStats {
+        ram: RamStats {
+            total_gb: ram_total_gb,
+            used_gb: ram_used_gb,
+            free_gb: ram_free_gb,
+        },
+        cpu: CpuStats {
+            cores: cpu_cores,
+            usage_percent: cpu_usage_percent,
+        },
+        disk: DiskStats {
+            total_gb: disk_total_gb,
+            used_gb: disk_used_gb,
+            free_gb: disk_free_gb,
+        },
+        gpus,
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .to_string(),
+    }
+}
 
 /// Run the worker client loop with auto-reconnect.
 pub async fn run(config: Arc<WorkerConfig>) {
@@ -44,32 +94,16 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     info!("WebSocket connected");
 
     // Send hello
-    let gpus = hardware::detect_gpus();
     let cached = models::list_cached_models(&config.models_dir);
 
-    // Apply resource limits from constraints (if configured)
-    // If no limits set, use 90% of actual hardware (10% buffer for system)
-    let cpu_cores = config
-        .constraints
-        .cpu_limit
-        .unwrap_or_else(|| (hardware::cpu_cores() as f64 * 0.9).max(1.0) as usize);
-    let ram_total_gb = config
-        .constraints
-        .ram_limit_gb
-        .unwrap_or_else(|| hardware::total_ram_gb() * 0.9);
-    let disk_space_gb = config
-        .constraints
-        .disk_limit_gb
-        .unwrap_or_else(|| hardware::available_disk_space_gb(&config.models_dir) * 0.9);
+    // Build hardware stats
+    let hardware_stats = build_hardware_stats(config);
 
     let hello = WorkerMessage::Hello {
         worker_id: config.worker_id.clone(),
         api_key: config.api_key.clone(),
         name: config.worker_name.clone(),
-        gpus: gpus.clone(),
-        ram_total_gb,
-        cpu_cores,
-        disk_space_gb,
+        hardware_stats,
         platform: hardware::platform().to_string(),
         models_cached: cached.clone(),
         constraints: Box::new(Some(config.constraints.clone())),
@@ -115,20 +149,12 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
         let mut interval = time::interval(Duration::from_secs(hb_config.heartbeat_interval_secs));
         loop {
             interval.tick().await;
-            let gpus = hardware::detect_gpus();
             let cached = models::list_cached_models(&hb_config.models_dir);
-            // Apply disk limit from constraints (if configured)
-            // If no limit set, use 90% of available (10% buffer)
-            let disk_space_gb = hb_config
-                .constraints
-                .disk_limit_gb
-                .unwrap_or_else(|| hardware::available_disk_space_gb(&hb_config.models_dir) * 0.9);
+            let hardware_stats = build_hardware_stats(&hb_config);
 
             let msg = WorkerMessage::Heartbeat {
                 worker_id: hb_config.worker_id.clone(),
-                gpus,
-                ram_free_gb: hardware::free_ram_gb(),
-                disk_space_gb,
+                hardware_stats,
                 models_cached: cached,
             };
             let json = match serde_json::to_string(&msg) {

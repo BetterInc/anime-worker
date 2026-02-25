@@ -8,6 +8,35 @@ use crate::config::WorkerConstraints;
 // Worker -> Server messages
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareStats {
+    pub ram: RamStats,
+    pub cpu: CpuStats,
+    pub disk: DiskStats,
+    pub gpus: Vec<GpuInfo>,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RamStats {
+    pub total_gb: f64,
+    pub used_gb: f64,
+    pub free_gb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CpuStats {
+    pub cores: usize,
+    pub usage_percent: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiskStats {
+    pub total_gb: f64,
+    pub used_gb: f64,
+    pub free_gb: f64,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WorkerMessage {
@@ -15,10 +44,7 @@ pub enum WorkerMessage {
         worker_id: String,
         api_key: String,
         name: String,
-        gpus: Vec<GpuInfo>,
-        ram_total_gb: f64,
-        cpu_cores: usize,
-        disk_space_gb: f64,
+        hardware_stats: HardwareStats,
         platform: String,
         models_cached: Vec<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -26,9 +52,7 @@ pub enum WorkerMessage {
     },
     Heartbeat {
         worker_id: String,
-        gpus: Vec<GpuInfo>,
-        ram_free_gb: f64,
-        disk_space_gb: f64,
+        hardware_stats: HardwareStats,
         models_cached: Vec<String>,
     },
     RequestTask {

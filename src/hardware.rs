@@ -131,3 +131,68 @@ pub fn available_disk_space_gb(path: &std::path::Path) -> f64 {
         0.0
     }
 }
+
+/// Get total disk space in GB for a given path (cross-platform).
+/// Returns 0.0 if unable to determine.
+pub fn total_disk_space_gb(path: &std::path::Path) -> f64 {
+    use sysinfo::Disks;
+
+    let disks = Disks::new_with_refreshed_list();
+
+    // Find the disk that contains this path
+    let mut best_match: Option<&sysinfo::Disk> = None;
+    let mut best_match_len = 0;
+
+    for disk in &disks {
+        let mount_point = disk.mount_point();
+        if let Ok(_rel) = path.strip_prefix(mount_point) {
+            let mount_len = mount_point.as_os_str().len();
+            if mount_len > best_match_len {
+                best_match = Some(disk);
+                best_match_len = mount_len;
+            }
+        } else if path.starts_with(mount_point) {
+            let mount_len = mount_point.as_os_str().len();
+            if mount_len > best_match_len {
+                best_match = Some(disk);
+                best_match_len = mount_len;
+            }
+        }
+    }
+
+    if let Some(disk) = best_match {
+        let total_bytes = disk.total_space();
+        return total_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+    }
+
+    // Fallback: use first disk or 0
+    if let Some(disk) = disks.first() {
+        let total_bytes = disk.total_space();
+        total_bytes as f64 / (1024.0 * 1024.0 * 1024.0)
+    } else {
+        0.0
+    }
+}
+
+/// Get current CPU usage as a percentage (0.0 - 100.0).
+/// Note: This requires a small delay to measure CPU usage accurately.
+pub fn cpu_usage_percent() -> f64 {
+    use std::thread;
+    use std::time::Duration;
+
+    let mut sys = System::new();
+    sys.refresh_cpu_all();
+
+    // Sleep briefly to get accurate CPU measurement
+    thread::sleep(Duration::from_millis(200));
+    sys.refresh_cpu_all();
+
+    // Calculate average CPU usage across all cores
+    let cpus = sys.cpus();
+    if cpus.is_empty() {
+        return 0.0;
+    }
+
+    let total_usage: f32 = cpus.iter().map(|cpu| cpu.cpu_usage()).sum();
+    (total_usage / cpus.len() as f32) as f64
+}
