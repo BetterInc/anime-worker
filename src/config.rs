@@ -138,7 +138,15 @@ pub fn config_dir() -> PathBuf {
 }
 
 /// Get the default config file path
+/// Checks current directory first, then falls back to ~/.anime-worker/
 pub fn config_file_path() -> PathBuf {
+    // Check current directory first (for development/local runs)
+    let local_config = PathBuf::from("config.toml");
+    if local_config.exists() {
+        return local_config;
+    }
+
+    // Fall back to home directory
     config_dir().join("config.toml")
 }
 

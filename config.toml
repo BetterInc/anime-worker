@@ -3,8 +3,9 @@ worker_id = "42676a86-383b-4ae4-ab29-a4130a0ae988"
 api_key = "aw_CHM552Vi4XKTVDbLCPejoirkbFgtsSCWfgUZYgDUNy4"
 worker_name = "Docker Test Worker"
 models_dir = "/app/models"
-python_path = "python3"
+python_path = "/home/bram/private/video-generator/anime-worker/python/venv/bin/python"
+python_scripts_dir = "/home/bram/private/video-generator/anime-worker/python"
 heartbeat_interval_secs = 30
 
 [constraints]
-max_model_size_gb = 30
+max_model_size_gb = 30.0
