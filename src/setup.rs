@@ -49,7 +49,10 @@ pub fn run(config_path: &Path, scripts_dir: &Path) -> anyhow::Result<()> {
     };
 
     if skip_setup {
-        println!("{} Using existing config — nothing changed.", style("✓").green());
+        println!(
+            "{} Using existing config — nothing changed.",
+            style("✓").green()
+        );
         offer_python_setup(&theme, scripts_dir)?;
         print_done();
         return Ok(());
@@ -62,7 +65,11 @@ pub fn run(config_path: &Path, scripts_dir: &Path) -> anyhow::Result<()> {
     cfg.save(config_path)
         .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 
-    println!("\n{} Config saved to {}", style("✓").green(), style(config_path.display()).yellow());
+    println!(
+        "\n{} Config saved to {}",
+        style("✓").green(),
+        style(config_path.display()).yellow()
+    );
 
     // --- Step 4: optional Python setup -------------------------------------
     offer_python_setup(&theme, scripts_dir)?;
@@ -79,7 +86,10 @@ pub fn run(config_path: &Path, scripts_dir: &Path) -> anyhow::Result<()> {
 /// [`WorkerConfig`].  All I/O goes through `dialoguer`; no file operations
 /// are performed here.
 pub fn gather_config(theme: &ColorfulTheme) -> anyhow::Result<WorkerConfig> {
-    println!("\n{}", style("── Worker connection ──────────────────────────────").dim());
+    println!(
+        "\n{}",
+        style("── Worker connection ──────────────────────────────").dim()
+    );
 
     // Server URL
     let server_url: String = Input::with_theme(theme)
@@ -109,7 +119,10 @@ pub fn gather_config(theme: &ColorfulTheme) -> anyhow::Result<WorkerConfig> {
     let worker_id = derive_worker_id_from_key(&api_key, theme)?;
 
     // --- Resource limits ---------------------------------------------------
-    println!("\n{}", style("── Resource limits (optional) ─────────────────────").dim());
+    println!(
+        "\n{}",
+        style("── Resource limits (optional) ─────────────────────").dim()
+    );
 
     let configure_limits = Confirm::with_theme(theme)
         .with_prompt("Configure resource limits?")
@@ -160,8 +173,8 @@ pub fn gather_config(theme: &ColorfulTheme) -> anyhow::Result<WorkerConfig> {
 /// Prompt the user for resource constraints.
 pub fn gather_constraints(theme: &ColorfulTheme) -> anyhow::Result<WorkerConstraints> {
     let available_cores = hardware::cpu_cores();
-    let available_ram   = hardware::total_ram_gb();
-    let available_disk  = hardware::available_disk_space_gb(Path::new("."));
+    let available_ram = hardware::total_ram_gb();
+    let available_disk = hardware::available_disk_space_gb(Path::new("."));
 
     println!(
         "  Detected: {} CPU cores, {:.1} GB RAM, {:.1} GB disk free",
@@ -170,7 +183,10 @@ pub fn gather_constraints(theme: &ColorfulTheme) -> anyhow::Result<WorkerConstra
 
     // CPU
     let cpu_input: String = Input::with_theme(theme)
-        .with_prompt(format!("CPU cores to allocate (0 = all, max {})", available_cores))
+        .with_prompt(format!(
+            "CPU cores to allocate (0 = all, max {})",
+            available_cores
+        ))
         .default("0".to_string())
         .validate_with(|s: &String| validate_non_negative_usize(s))
         .interact_text()
@@ -179,7 +195,10 @@ pub fn gather_constraints(theme: &ColorfulTheme) -> anyhow::Result<WorkerConstra
 
     // RAM
     let ram_input: String = Input::with_theme(theme)
-        .with_prompt(format!("RAM limit in GB (0 = all, {:.0} GB available)", available_ram))
+        .with_prompt(format!(
+            "RAM limit in GB (0 = all, {:.0} GB available)",
+            available_ram
+        ))
         .default("0".to_string())
         .validate_with(|s: &String| validate_non_negative_f64(s))
         .interact_text()
@@ -188,7 +207,10 @@ pub fn gather_constraints(theme: &ColorfulTheme) -> anyhow::Result<WorkerConstra
 
     // Disk
     let disk_input: String = Input::with_theme(theme)
-        .with_prompt(format!("Disk space limit in GB (0 = all, {:.0} GB available)", available_disk))
+        .with_prompt(format!(
+            "Disk space limit in GB (0 = all, {:.0} GB available)",
+            available_disk
+        ))
         .default("0".to_string())
         .validate_with(|s: &String| validate_non_negative_f64(s))
         .interact_text()
@@ -268,18 +290,33 @@ pub fn run_python_setup(scripts_dir: &Path) -> anyhow::Result<()> {
 
 fn print_banner() {
     println!();
-    println!("{}", style("╔═══════════════════════════════════════╗").cyan());
-    println!("{}", style("║       anime-worker  •  Setup Wizard    ║").cyan());
-    println!("{}", style("╚═══════════════════════════════════════╝").cyan());
+    println!(
+        "{}",
+        style("╔═══════════════════════════════════════╗").cyan()
+    );
+    println!(
+        "{}",
+        style("║       anime-worker  •  Setup Wizard    ║").cyan()
+    );
+    println!(
+        "{}",
+        style("╚═══════════════════════════════════════╝").cyan()
+    );
     println!();
-    println!("This wizard creates a {} in the current directory.", style("config.toml").yellow());
+    println!(
+        "This wizard creates a {} in the current directory.",
+        style("config.toml").yellow()
+    );
     println!("You will need your API key from the worker registration page.");
 }
 
 fn print_done() {
     println!();
     println!("{}", style("✅  Setup complete!").green().bold());
-    println!("Run {} to start processing jobs.", style("./anime-worker run").yellow().bold());
+    println!(
+        "Run {} to start processing jobs.",
+        style("./anime-worker run").yellow().bold()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -302,10 +339,7 @@ pub fn hostname() -> String {
 ///
 /// If the key does not contain a UUID segment, ask the user to enter the
 /// worker ID explicitly.
-pub fn derive_worker_id_from_key(
-    api_key: &str,
-    theme: &ColorfulTheme,
-) -> anyhow::Result<String> {
+pub fn derive_worker_id_from_key(api_key: &str, theme: &ColorfulTheme) -> anyhow::Result<String> {
     if let Some(id) = extract_uuid_from_key(api_key) {
         return Ok(id);
     }
@@ -427,7 +461,7 @@ mod tests {
     #[test]
     fn extracts_uuid_from_valid_key() {
         let uuid = "42676a86-383b-4ae4-ab29-a4130a0ae988";
-        let key  = format!("aw_{}_CHM552Vi4XKTVDbLCPejoirkbFgtsSCWfgUZYgDUNy4", uuid);
+        let key = format!("aw_{}_CHM552Vi4XKTVDbLCPejoirkbFgtsSCWfgUZYgDUNy4", uuid);
         assert_eq!(extract_uuid_from_key(&key), Some(uuid.to_string()));
     }
 
@@ -563,8 +597,8 @@ mod tests {
     fn config_save_and_reload_preserves_constraints() {
         use crate::config::WorkerConfig;
 
-        let tmp = std::env::temp_dir()
-            .join(format!("anime-worker-setup-test-{}", std::process::id()));
+        let tmp =
+            std::env::temp_dir().join(format!("anime-worker-setup-test-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
         let path = tmp.join("config.toml");
 
