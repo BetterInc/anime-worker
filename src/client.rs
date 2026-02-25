@@ -48,8 +48,8 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     let cached = models::list_cached_models(&config.models_dir);
 
     // Apply resource limits from constraints (if configured)
-    let cpu_cores = config.constraints.cpu_limit.unwrap_or_else(|| hardware::cpu_cores());
-    let ram_total_gb = config.constraints.ram_limit_gb.unwrap_or_else(|| hardware::total_ram_gb());
+    let cpu_cores = config.constraints.cpu_limit.unwrap_or_else(hardware::cpu_cores);
+    let ram_total_gb = config.constraints.ram_limit_gb.unwrap_or_else(hardware::total_ram_gb);
     let disk_space_gb = config.constraints.disk_limit_gb.unwrap_or_else(|| hardware::available_disk_space_gb(&config.models_dir));
 
     let hello = WorkerMessage::Hello {
@@ -62,7 +62,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
         disk_space_gb,
         platform: hardware::platform().to_string(),
         models_cached: cached.clone(),
-        constraints: Some(config.constraints.clone()),
+        constraints: Box::new(Some(config.constraints.clone())),
     };
     let hello_json = serde_json::to_string(&hello)?;
     write.send(Message::Text(hello_json)).await?;

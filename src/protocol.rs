@@ -22,7 +22,7 @@ pub enum WorkerMessage {
         platform: String,
         models_cached: Vec<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        constraints: Option<WorkerConstraints>,
+        constraints: Box<Option<WorkerConstraints>>,
     },
     Heartbeat {
         worker_id: String,
