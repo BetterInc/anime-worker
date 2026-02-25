@@ -14,7 +14,6 @@ Supported task types:
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -41,7 +40,6 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     """Handle preview or render generation tasks."""
     from lib.pipeline import setup_pipeline
     from lib.inference import generate_preview_frame
-    from lib.config import validate_generation_params
 
     task_id = job["task_id"]
     task_type = job["task_type"]
@@ -53,7 +51,9 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     output_dir = Path(job["output_dir"])
     last_frame_path = job.get("last_frame_path")
 
-    logger.info(f"Task {task_id[:8]}: {task_type} generation for scene {scene.get('id', '?')}")
+    logger.info(
+        f"Task {task_id[:8]}: {task_type} generation for scene {scene.get('id', '?')}"
+    )
     logger.info(f"Model: {model_path}")
     logger.info(f"Output: {output_dir}")
 
@@ -87,6 +87,7 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     class SimpleSeedManager:
         def get_or_create_seed(self, sid):
             import random
+
             return seed if seed else random.randint(0, 2**32 - 1)
 
         def build_full_prompt(self, sid):
@@ -112,6 +113,7 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     _original_tqdm = None
     try:
         import tqdm
+
         _original_tqdm = tqdm.tqdm
 
         class ProgressTqdm(tqdm.tqdm):
@@ -119,15 +121,17 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
                 super().update(n)
                 if self.total and self.total > 0:
                     pct = (self.n / self.total) * 100
-                    emit({
-                        "type": "progress",
-                        "pct": pct,
-                        "message": f"Step {self.n}/{self.total}",
-                    })
+                    emit(
+                        {
+                            "type": "progress",
+                            "pct": pct,
+                            "message": f"Step {self.n}/{self.total}",
+                        }
+                    )
 
         tqdm.tqdm = ProgressTqdm
         # Also patch tqdm.auto
-        if hasattr(tqdm, 'auto'):
+        if hasattr(tqdm, "auto"):
             tqdm.auto.tqdm = ProgressTqdm
     except ImportError:
         pass
@@ -148,6 +152,7 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     # Restore tqdm
     if _original_tqdm:
         import tqdm
+
         tqdm.tqdm = _original_tqdm
 
     if not success:
@@ -179,7 +184,9 @@ def handle_upscale_task(job: dict) -> tuple[list[str], dict]:
     task_id = job["task_id"]
     scene = job["scene"]
     output_dir = Path(job["output_dir"])
-    input_video_path = job.get("input_video_path")  # Local path to source video (pre-downloaded by Rust worker)
+    input_video_path = job.get(
+        "input_video_path"
+    )  # Local path to source video (pre-downloaded by Rust worker)
 
     scene_id = scene.get("id", 0)
 
@@ -253,11 +260,13 @@ def main():
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 
-        emit({
-            "type": "complete",
-            "files": files,
-            "metadata": metadata,
-        })
+        emit(
+            {
+                "type": "complete",
+                "files": files,
+                "metadata": metadata,
+            }
+        )
 
     except Exception as e:
         logger.exception(f"Task failed: {task_type}")

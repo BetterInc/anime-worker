@@ -17,9 +17,18 @@ from .config import validate_generation_params
 logger = logging.getLogger(__name__)
 
 
-def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_id,
-                           seed_manager, pipeline, previous_frame_path=None,
-                           output_base=None, model_config=None):
+def generate_preview_frame(
+    prompt,
+    negative_prompt,
+    config,
+    output_path,
+    scene_id,
+    seed_manager,
+    pipeline,
+    previous_frame_path=None,
+    output_base=None,
+    model_config=None,
+):
     """Generate a single preview clip for a scene."""
     seed = seed_manager.get_or_create_seed(scene_id)
     logger.info(f"Generating preview for scene {scene_id} with seed {seed}")
@@ -27,9 +36,9 @@ def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_i
     full_prompt = seed_manager.build_full_prompt(scene_id)
     logger.info(f"Full prompt: {full_prompt[:100]}...")
 
-    preview_config = config['generation']['preview']
+    preview_config = config["generation"]["preview"]
 
-    logger.info(f"Preview settings:")
+    logger.info("Preview settings:")
     logger.info(f"  Resolution: {preview_config['width']}x{preview_config['height']}")
     logger.info(f"  FPS: {preview_config.get('fps', 24)}")
     logger.info(f"  Frames: {preview_config['num_frames']}")
@@ -40,23 +49,33 @@ def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_i
         logger.info(f"  Using last frame from previous scene: {previous_frame_path}")
 
     width, height, num_frames = validate_generation_params(
-        preview_config['width'], preview_config['height'],
-        preview_config['num_frames'], model_config,
+        preview_config["width"],
+        preview_config["height"],
+        preview_config["num_frames"],
+        model_config,
     )
-    if width != preview_config['width'] or height != preview_config['height'] or num_frames != preview_config['num_frames']:
-        logger.info(f"  Adjusted: {preview_config['width']}x{preview_config['height']}x{preview_config['num_frames']} -> {width}x{height}x{num_frames}")
+    if (
+        width != preview_config["width"]
+        or height != preview_config["height"]
+        or num_frames != preview_config["num_frames"]
+    ):
+        logger.info(
+            f"  Adjusted: {preview_config['width']}x{preview_config['height']}x{preview_config['num_frames']} -> {width}x{height}x{num_frames}"
+        )
 
     torch.cuda.empty_cache()
 
-    generator = torch.Generator(device='cpu').manual_seed(seed)
+    generator = torch.Generator(device="cpu").manual_seed(seed)
 
     # Progress callback for real-time updates
-    total_steps = preview_config['num_inference_steps']
+    total_steps = preview_config["num_inference_steps"]
 
     def progress_callback(step, timestep, latents):
         progress = int((step / total_steps) * 100)
         if step % max(1, total_steps // 10) == 0:  # Log every 10%
-            logger.info(f"  Generation progress: {progress}% (step {step}/{total_steps})")
+            logger.info(
+                f"  Generation progress: {progress}% (step {step}/{total_steps})"
+            )
 
     pipeline_kwargs = {
         "prompt": full_prompt,
@@ -64,19 +83,19 @@ def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_i
         "num_frames": num_frames,
         "height": height,
         "width": width,
-        "num_inference_steps": preview_config['num_inference_steps'],
-        "guidance_scale": preview_config['guidance_scale'],
+        "num_inference_steps": preview_config["num_inference_steps"],
+        "guidance_scale": preview_config["guidance_scale"],
         "generator": generator,
         "callback": progress_callback,
         "callback_steps": 1,
     }
 
-    if preview_config.get('guidance_scale_2') is not None:
-        pipeline_kwargs["guidance_scale_2"] = preview_config['guidance_scale_2']
+    if preview_config.get("guidance_scale_2") is not None:
+        pipeline_kwargs["guidance_scale_2"] = preview_config["guidance_scale_2"]
     mc = model_config or {}
-    if mc.get('flow_shift') is not None:
-        pipeline_kwargs["flow_shift"] = mc['flow_shift']
-    if mc.get('flow_reverse'):
+    if mc.get("flow_shift") is not None:
+        pipeline_kwargs["flow_shift"] = mc["flow_shift"]
+    if mc.get("flow_reverse"):
         pipeline_kwargs["flow_reverse"] = True
 
     if previous_frame_path and Path(previous_frame_path).exists():
@@ -89,7 +108,7 @@ def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_i
 
     sig = inspect.signature(pipeline.__call__)
     accepted = set(sig.parameters.keys())
-    if accepted and '**' not in str(sig):
+    if accepted and "**" not in str(sig):
         has_var_keyword = any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
         )
@@ -101,10 +120,10 @@ def generate_preview_frame(prompt, negative_prompt, config, output_path, scene_i
 
     output = pipeline(**pipeline_kwargs)
 
-    frames = output.frames[0] if hasattr(output, 'frames') else output.images
+    frames = output.frames[0] if hasattr(output, "frames") else output.images
 
-    video_path = output_path.replace('.png', '.mp4')
-    export_to_video(frames, video_path, fps=preview_config['fps'])
+    video_path = output_path.replace(".png", ".mp4")
+    export_to_video(frames, video_path, fps=preview_config["fps"])
     logger.info(f"Preview video saved to: {video_path}")
 
     if torch.cuda.is_available():

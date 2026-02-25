@@ -40,7 +40,14 @@ def find_compatible_python():
 
     candidates = []
     if system == "Windows":
-        candidates = ["py", "python", "python3", "python3.12", "python3.11", "python3.10"]
+        candidates = [
+            "py",
+            "python",
+            "python3",
+            "python3.12",
+            "python3.11",
+            "python3.10",
+        ]
     else:
         candidates = ["python3.12", "python3.11", "python3.10", "python3"]
 
@@ -54,7 +61,7 @@ def find_compatible_python():
                             [cmd, f"-{ver}", "--version"],
                             capture_output=True,
                             text=True,
-                            check=True
+                            check=True,
                         )
                         print(f"✓ Found: {result.stdout.strip()}")
                         return [cmd, f"-{ver}"]
@@ -62,15 +69,12 @@ def find_compatible_python():
                         continue
             else:
                 result = subprocess.run(
-                    [cmd, "--version"],
-                    capture_output=True,
-                    text=True,
-                    check=True
+                    [cmd, "--version"], capture_output=True, text=True, check=True
                 )
                 # Check version
                 version_str = result.stdout.strip()
                 if "Python 3.1" in version_str:  # 3.10, 3.11, 3.12
-                    major, minor = version_str.split()[1].split('.')[:2]
+                    major, minor = version_str.split()[1].split(".")[:2]
                     if (3, 10) <= (int(major), int(minor)) < (3, 13):
                         print(f"✓ Found: {version_str}")
                         return cmd
@@ -89,7 +93,9 @@ def download_portable_python():
 
     if system not in PYTHON_URLS:
         print(f"ERROR: Unsupported platform: {system}")
-        print("Please install Python 3.11 manually from https://www.python.org/downloads/")
+        print(
+            "Please install Python 3.11 manually from https://www.python.org/downloads/"
+        )
         sys.exit(1)
 
     url = PYTHON_URLS[system]
@@ -104,10 +110,10 @@ def download_portable_python():
 
     print("Extracting...")
     if filename.suffix == ".zip":
-        with zipfile.ZipFile(filename, 'r') as zip_ref:
+        with zipfile.ZipFile(filename, "r") as zip_ref:
             zip_ref.extractall(PYTHON_DIR)
     else:
-        with tarfile.open(filename, 'r:gz') as tar_ref:
+        with tarfile.open(filename, "r:gz") as tar_ref:
             tar_ref.extractall(PYTHON_DIR)
 
     # Find python executable
@@ -141,26 +147,32 @@ def main():
         create_cmd = [python_exe, "-m", "venv", str(VENV_DIR)]
 
     if not VENV_DIR.exists():
-        print(f"\n📦 Creating virtual environment...")
+        print("\n📦 Creating virtual environment...")
         subprocess.check_call(create_cmd)
 
-    # Determine pip path
+    # Determine python path
     if os.name == "nt":
-        pip = str(VENV_DIR / "Scripts" / "pip")
         python = str(VENV_DIR / "Scripts" / "python")
     else:
-        pip = str(VENV_DIR / "bin" / "pip")
         python = str(VENV_DIR / "bin" / "python")
 
     print("\n⬆️  Upgrading pip...")
     subprocess.check_call([python, "-m", "pip", "install", "--upgrade", "pip", "-q"])
 
     print("\n🔥 Installing PyTorch (CUDA 12.4)...")
-    subprocess.check_call([
-        python, "-m", "pip", "install",
-        "torch", "torchvision", "torchaudio",
-        "--index-url", "https://download.pytorch.org/whl/cu124",
-    ])
+    subprocess.check_call(
+        [
+            python,
+            "-m",
+            "pip",
+            "install",
+            "torch",
+            "torchvision",
+            "torchaudio",
+            "--index-url",
+            "https://download.pytorch.org/whl/cu124",
+        ]
+    )
 
     if REQUIREMENTS.exists():
         print(f"\n📚 Installing dependencies from {REQUIREMENTS.name}...")
@@ -170,7 +182,7 @@ def main():
     print("✅ Setup complete!")
     print("=" * 60)
     print(f"Python: {python}")
-    print(f"\n💡 Config will auto-update. Just run: anime-worker run")
+    print("\n💡 Config will auto-update. Just run: anime-worker run")
     print("=" * 60)
 
 

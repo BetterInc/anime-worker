@@ -70,7 +70,7 @@ def assemble_videos(
         if not video_file.exists():
             logger.error(f"Input file not found: {video_file}")
             return False
-        logger.info(f"  [{i+1}] {video_file.name}")
+        logger.info(f"  [{i + 1}] {video_file.name}")
 
     if progress_callback:
         progress_callback(5, "Analyzing input videos...")
@@ -82,7 +82,9 @@ def assemble_videos(
         if duration:
             total_duration += duration
 
-    logger.info(f"Total duration: {total_duration:.1f}s ({total_duration/60:.1f} minutes)")
+    logger.info(
+        f"Total duration: {total_duration:.1f}s ({total_duration / 60:.1f} minutes)"
+    )
 
     # Create temporary concat file
     concat_file = Path(tempfile.mktemp(suffix=".txt", prefix="concat_"))
@@ -100,15 +102,22 @@ def assemble_videos(
         # Build FFmpeg command using concat demuxer (lossless concatenation)
         cmd = [
             "ffmpeg",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", str(concat_file),
-            "-c:v", codec,
-            "-pix_fmt", "yuv420p",
-            "-crf", str(crf),
-            "-preset", preset,
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_file),
+            "-c:v",
+            codec,
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
             "-y",  # Overwrite output
-            str(output_path)
+            str(output_path),
         ]
 
         logger.info("Running FFmpeg concat...")
@@ -139,7 +148,10 @@ def assemble_videos(
                         progress = min(95, max(last_progress, progress))
 
                         if progress > last_progress + 5:  # Update every 5%
-                            progress_callback(progress, f"Encoding... {current_seconds:.0f}/{total_duration:.0f}s")
+                            progress_callback(
+                                progress,
+                                f"Encoding... {current_seconds:.0f}/{total_duration:.0f}s",
+                            )
                             last_progress = progress
                 except Exception:
                     pass  # Ignore parsing errors
@@ -180,7 +192,7 @@ def _create_concat_file(video_files: List[Path], concat_path: Path) -> None:
         file '/absolute/path/to/video1.mp4'
         file '/absolute/path/to/video2.mp4'
     """
-    with open(concat_path, 'w') as f:
+    with open(concat_path, "w") as f:
         for video in video_files:
             # FFmpeg concat format requires absolute paths
             abs_path = video.absolute()
@@ -196,10 +208,13 @@ def _get_video_duration(video_path: Path) -> Optional[float]:
     try:
         cmd = [
             "ffprobe",
-            "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "json",
-            str(video_path)
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(video_path),
         ]
 
         result = subprocess.run(
@@ -225,11 +240,13 @@ def get_video_info(video_path: Path) -> Optional[dict]:
     try:
         cmd = [
             "ffprobe",
-            "-v", "error",
+            "-v",
+            "error",
             "-show_format",
             "-show_streams",
-            "-of", "json",
-            str(video_path)
+            "-of",
+            "json",
+            str(video_path),
         ]
 
         result = subprocess.run(

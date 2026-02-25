@@ -82,10 +82,14 @@ def upscale_video(
         # Step 1: Extract frames from input video
         logger.info("Step 1/3: Extracting frames...")
         extract_cmd = [
-            "ffmpeg", "-i", str(input_path),
-            "-qscale:v", "1",  # High quality
-            "-vsync", "0",  # Preserve frame timing
-            str(frames_input / "frame_%05d.png")
+            "ffmpeg",
+            "-i",
+            str(input_path),
+            "-qscale:v",
+            "1",  # High quality
+            "-vsync",
+            "0",  # Preserve frame timing
+            str(frames_input / "frame_%05d.png"),
         ]
 
         result = subprocess.run(
@@ -118,11 +122,16 @@ def upscale_video(
             # Use NCNN version (faster, multi-GPU)
             upscale_cmd = [
                 "realesrgan-ncnn-vulkan",
-                "-i", str(frames_input),
-                "-o", str(frames_output),
-                "-n", model_name,
-                "-s", str(scale),
-                "-f", "png",
+                "-i",
+                str(frames_input),
+                "-o",
+                str(frames_output),
+                "-n",
+                model_name,
+                "-s",
+                str(scale),
+                "-f",
+                "png",
             ]
 
             result = subprocess.run(
@@ -139,7 +148,12 @@ def upscale_video(
             # Fallback: Use Python Real-ESRGAN (if available)
             logger.warning("realesrgan-ncnn-vulkan not found, trying Python fallback")
             success = _upscale_with_python(
-                frames_input, frames_output, scale, model_name, total_frames, progress_callback
+                frames_input,
+                frames_output,
+                scale,
+                model_name,
+                total_frames,
+                progress_callback,
             )
             if not success:
                 return False
@@ -147,7 +161,9 @@ def upscale_video(
         # Verify upscaled frames
         upscaled_files = sorted(frames_output.glob("frame_*.png"))
         if len(upscaled_files) != total_frames:
-            logger.error(f"Frame count mismatch: expected {total_frames}, got {len(upscaled_files)}")
+            logger.error(
+                f"Frame count mismatch: expected {total_frames}, got {len(upscaled_files)}"
+            )
             return False
 
         logger.info(f"  Upscaled {len(upscaled_files)} frames")
@@ -164,14 +180,20 @@ def upscale_video(
 
         reassemble_cmd = [
             "ffmpeg",
-            "-framerate", str(fps),
-            "-i", str(frames_output / "frame_%05d.png"),
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            "-crf", "18",  # High quality
-            "-preset", "slow",
+            "-framerate",
+            str(fps),
+            "-i",
+            str(frames_output / "frame_%05d.png"),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            "18",  # High quality
+            "-preset",
+            "slow",
             "-y",  # Overwrite output
-            str(output_path)
+            str(output_path),
         ]
 
         result = subprocess.run(
@@ -223,7 +245,14 @@ def _upscale_with_python(
         logger.info("Using Python Real-ESRGAN package")
 
         # Initialize model
-        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=6, num_grow_ch=32, scale=scale)
+        model = RRDBNet(
+            num_in_ch=3,
+            num_out_ch=3,
+            num_feat=64,
+            num_block=6,
+            num_grow_ch=32,
+            scale=scale,
+        )
         upsampler = RealESRGANer(
             scale=scale,
             model_path=f"weights/{model_name}.pth",
@@ -259,7 +288,9 @@ def _upscale_with_python(
         return True
 
     except ImportError:
-        logger.error("Python Real-ESRGAN package not installed. Install with: pip install realesrgan")
+        logger.error(
+            "Python Real-ESRGAN package not installed. Install with: pip install realesrgan"
+        )
         return False
     except Exception as e:
         logger.exception(f"Python upscaling failed: {e}")
@@ -271,11 +302,15 @@ def _get_video_fps(video_path: Path) -> int:
     try:
         cmd = [
             "ffprobe",
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=r_frame_rate",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            str(video_path)
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=r_frame_rate",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(video_path),
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
