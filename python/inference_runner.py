@@ -193,6 +193,14 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
             scene_metadata["file_size"] = output_file.stat().st_size
 
         all_files.append(output_filename)
+
+        # Add lastframe PNG to upload list for scene continuity
+        if new_lastframe:
+            lastframe_filename = Path(new_lastframe).name
+            scene_metadata["lastframe"] = lastframe_filename
+            all_files.append(lastframe_filename)
+            logger.info(f"  Lastframe will be uploaded: {lastframe_filename}")
+
         all_metadata.append(scene_metadata)
 
         logger.info(f"[Scene {scene_idx+1}/{total_scenes}] ✓ Complete: {output_filename}")
