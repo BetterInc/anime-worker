@@ -24,14 +24,15 @@ PYTHON_URLS = {
 
 
 def find_compatible_python():
-    """Find or download a compatible Python version (3.10-3.12)."""
-    # Check current Python first
+    """Find or download a compatible Python version (3.11 only for consistency)."""
+    # Check if current Python is exactly 3.11
     current_version = sys.version_info
-    if (3, 10) <= current_version < (3, 13):
-        print(f"✓ Using current Python {current_version.major}.{current_version.minor}")
+    if current_version.major == 3 and current_version.minor == 11:
+        print(f"✓ Using system Python {current_version.major}.{current_version.minor}")
         return sys.executable
 
-    print(f"⚠ Current Python {current_version.major}.{current_version.minor} not compatible (need 3.10-3.12)")
+    print(f"⚠ System Python {current_version.major}.{current_version.minor} detected")
+    print("🎯 Downloading Python 3.11 for consistent environment...")
 
     # Try to find installed Python versions
     print("Searching for compatible Python...")
