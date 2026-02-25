@@ -35,10 +35,7 @@ fn build_hardware_stats(config: &WorkerConfig) -> HardwareStats {
     let ram_actual_used = ram_actual_total - ram_actual_free;
 
     // Apply constraint to total if configured
-    let ram_total_gb = config
-        .constraints
-        .ram_limit_gb
-        .unwrap_or(ram_actual_total);
+    let ram_total_gb = config.constraints.ram_limit_gb.unwrap_or(ram_actual_total);
     let ram_used_gb = ram_actual_used;
     let ram_free_gb = ram_actual_free;
 

@@ -16,16 +16,9 @@ use tracing::{info, warn};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PythonOutput {
-    Progress {
-        pct: f64,
-        message: String,
-    },
-    Complete {
-        metadata: serde_json::Value,
-    },
-    Error {
-        message: String,
-    },
+    Progress { pct: f64, message: String },
+    Complete { metadata: serde_json::Value },
+    Error { message: String },
 }
 
 /// A single scene within a job batch
@@ -173,4 +166,3 @@ pub async fn spawn_inference(
 
     Ok((output_rx, handle))
 }
-
