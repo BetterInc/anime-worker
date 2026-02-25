@@ -95,7 +95,8 @@ pub async fn download_model(
         use sysinfo::Disks;
 
         let disks = Disks::new_with_refreshed_list();
-        let model_path_abs = model_path_for_check.canonicalize()
+        let model_path_abs = model_path_for_check
+            .canonicalize()
             .unwrap_or_else(|_| model_path_for_check.clone());
 
         // Find the disk that contains the model path
@@ -164,7 +165,10 @@ pub async fn download_model(
             match child.try_wait() {
                 Ok(Some(status)) => {
                     if !status.success() {
-                        return Err(anyhow::anyhow!("Model download failed with exit code: {}", status));
+                        return Err(anyhow::anyhow!(
+                            "Model download failed with exit code: {}",
+                            status
+                        ));
                     }
                     info!("Model download process completed");
                     break;
@@ -177,8 +181,12 @@ pub async fn download_model(
                             // Only report if changed by >100MB
                             progress_callback(gb, model_size_gb);
                             last_size_gb = gb;
-                            info!("Download progress: {:.2} / {:.1} GB ({:.0}%)",
-                                gb, model_size_gb, (gb / model_size_gb * 100.0).min(100.0));
+                            info!(
+                                "Download progress: {:.2} / {:.1} GB ({:.0}%)",
+                                gb,
+                                model_size_gb,
+                                (gb / model_size_gb * 100.0).min(100.0)
+                            );
                         }
                     }
                     std::thread::sleep(std::time::Duration::from_secs(2));
@@ -193,7 +201,10 @@ pub async fn download_model(
         if let Ok(size) = dir_size_bytes(&model_path_buf) {
             let gb = size as f64 / (1024.0 * 1024.0 * 1024.0);
             progress_callback(gb, model_size_gb);
-            info!("Final model size: {:.2} GB (expected {:.1} GB)", gb, model_size_gb);
+            info!(
+                "Final model size: {:.2} GB (expected {:.1} GB)",
+                gb, model_size_gb
+            );
         }
 
         Ok(())
