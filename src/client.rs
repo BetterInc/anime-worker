@@ -441,7 +441,7 @@ where
                     let _ = write.lock().await.send(Message::Text(json)).await;
                 }
             }
-            PythonOutput::Complete { files: _, metadata } => {
+            PythonOutput::Complete { metadata } => {
                 if let Some(scenes_meta) = metadata.get("scenes").and_then(|v| v.as_array()) {
                     for scene_meta in scenes_meta.iter() {
                         if let Some(task_id) = scene_meta.get("task_id").and_then(|v| v.as_str()) {
