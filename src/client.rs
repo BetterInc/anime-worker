@@ -297,6 +297,7 @@ where
             &model_config.hf_repo,
             &config.models_dir,
             &model_config.local_dir,
+            model_config.model_size_gb,
             progress_cb,
         )
         .await?;

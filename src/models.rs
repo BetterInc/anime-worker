@@ -73,11 +73,12 @@ fn map_local_dirs_to_model_ids(local_dirs: &[String]) -> Vec<String> {
 /// Download a model from HuggingFace using Python CLI (more reliable for large files).
 ///
 /// Returns the local path on success.
-/// Progress is reported via the callback (downloaded_gb, total_gb_estimate).
+/// Progress is reported via the callback (downloaded_gb, total_gb).
 pub async fn download_model(
     hf_repo: &str,
     models_dir: &Path,
     local_dir: &str,
+    model_size_gb: f64,
     progress_callback: impl Fn(f64, f64) + Send + 'static,
 ) -> anyhow::Result<PathBuf> {
     let model_path = models_dir.join(local_dir);
@@ -88,8 +89,42 @@ pub async fn download_model(
     let hf_repo = hf_repo.to_string();
     let model_path_str = model_path.to_string_lossy().to_string();
 
-    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-        // Use huggingface-cli download for reliability with large files
+    // Check available disk space before download
+    let model_path_for_check = model_path.clone();
+    let available_gb = tokio::task::spawn_blocking(move || -> anyhow::Result<f64> {
+        use sysinfo::Disks;
+
+        let disks = Disks::new_with_refreshed_list();
+        let model_path_abs = model_path_for_check.canonicalize()
+            .unwrap_or_else(|_| model_path_for_check.clone());
+
+        // Find the disk that contains the model path
+        for disk in &disks {
+            let mount_point = disk.mount_point();
+            if model_path_abs.starts_with(mount_point) {
+                let available_bytes = disk.available_space();
+                return Ok(available_bytes as f64 / (1024.0 * 1024.0 * 1024.0));
+            }
+        }
+
+        Ok(0.0) // Couldn't determine disk space
+    })
+    .await??;
+
+    info!("Available disk space: {:.1} GB", available_gb);
+    info!("Model size: {:.1} GB", model_size_gb);
+
+    if available_gb > 0.0 && available_gb < model_size_gb * 1.5 {
+        warn!(
+            "Low disk space: {:.1} GB available, but model requires ~{:.1} GB",
+            available_gb, model_size_gb
+        );
+    }
+
+    // Spawn download in background thread with progress monitoring
+    let download_handle = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+        use std::process::{Command, Stdio};
+
         let python_path = std::env::current_dir()?.join("python/venv/bin/python");
 
         if !python_path.exists() {
@@ -101,7 +136,7 @@ pub async fn download_model(
 
         info!("Using Python HuggingFace Hub to download (more reliable for large files)");
 
-        let output = std::process::Command::new(&python_path)
+        let mut child = Command::new(&python_path)
             .args([
                 "-c",
                 &format!(
@@ -115,25 +150,56 @@ pub async fn download_model(
                     hf_repo, model_path_str
                 ),
             ])
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to spawn Python process: {}", e))?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("Model download failed: {}", stderr));
+        // Poll directory size while download is running
+        let model_path_buf = PathBuf::from(&model_path_str);
+        let mut last_size_gb = 0.0;
+
+        loop {
+            // Check if process is still running
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        return Err(anyhow::anyhow!("Model download failed with exit code: {}", status));
+                    }
+                    info!("Model download process completed");
+                    break;
+                }
+                Ok(None) => {
+                    // Still running - report progress
+                    if let Ok(size) = dir_size_bytes(&model_path_buf) {
+                        let gb = size as f64 / (1024.0 * 1024.0 * 1024.0);
+                        if (gb - last_size_gb).abs() > 0.1 {
+                            // Only report if changed by >100MB
+                            progress_callback(gb, model_size_gb);
+                            last_size_gb = gb;
+                            info!("Download progress: {:.2} / {:.1} GB ({:.0}%)",
+                                gb, model_size_gb, (gb / model_size_gb * 100.0).min(100.0));
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+                Err(e) => return Err(anyhow::anyhow!("Failed to check process status: {}", e)),
+            }
         }
 
         info!("Model downloaded successfully");
 
         // Report final size
-        if let Ok(size) = dir_size_bytes(&PathBuf::from(&model_path_str)) {
+        if let Ok(size) = dir_size_bytes(&model_path_buf) {
             let gb = size as f64 / (1024.0 * 1024.0 * 1024.0);
-            progress_callback(gb, 0.0);
+            progress_callback(gb, model_size_gb);
+            info!("Final model size: {:.2} GB (expected {:.1} GB)", gb, model_size_gb);
         }
 
         Ok(())
-    })
-    .await??;
+    });
+
+    download_handle.await??;
 
     info!("Model download complete: {}", model_path.display());
     Ok(model_path)
