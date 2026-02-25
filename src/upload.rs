@@ -47,6 +47,7 @@ pub async fn upload_file(
 }
 
 /// Upload a lastframe PNG (for continuity chaining).
+#[allow(dead_code)]
 pub async fn upload_lastframe(
     server_url: &str,
     task_id: &str,

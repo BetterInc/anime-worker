@@ -28,12 +28,19 @@ fn build_hardware_stats(config: &WorkerConfig) -> HardwareStats {
         .constraints
         .cpu_limit
         .unwrap_or_else(|| (hardware::cpu_cores() as f64 * 0.9).max(1.0) as usize);
+
+    // Get actual RAM stats
+    let ram_actual_total = hardware::total_ram_gb();
+    let ram_actual_free = hardware::free_ram_gb();
+    let ram_actual_used = ram_actual_total - ram_actual_free;
+
+    // Apply constraint to total if configured
     let ram_total_gb = config
         .constraints
         .ram_limit_gb
-        .unwrap_or_else(|| hardware::total_ram_gb() * 0.9);
-    let ram_free_gb = hardware::free_ram_gb();
-    let ram_used_gb = ram_total_gb - ram_free_gb;
+        .unwrap_or(ram_actual_total);
+    let ram_used_gb = ram_actual_used;
+    let ram_free_gb = ram_actual_free;
 
     let disk_total_gb = hardware::total_disk_space_gb(&config.models_dir);
     let disk_free_gb = config

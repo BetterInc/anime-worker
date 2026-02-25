@@ -21,6 +21,7 @@ pub enum PythonOutput {
         message: String,
     },
     Complete {
+        #[allow(dead_code)]
         files: Vec<String>,
         metadata: serde_json::Value,
     },
@@ -58,6 +59,7 @@ pub struct InferenceJob {
 
 /// Handle to a running Python inference process.
 pub struct RunningInference {
+    #[allow(dead_code)]
     child: Child,
     cancel_tx: mpsc::Sender<()>,
 }
@@ -172,6 +174,7 @@ pub async fn spawn_inference(
 }
 
 /// Wait for the inference process to complete and return the exit code.
+#[allow(dead_code)]
 pub async fn wait_for_completion(handle: &mut RunningInference) -> anyhow::Result<i32> {
     let status = handle.child.wait().await?;
     Ok(status.code().unwrap_or(-1))
