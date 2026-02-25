@@ -65,6 +65,16 @@ def generate_preview_frame(
 
     torch.cuda.empty_cache()
 
+    # Enable VAE tiling to reduce peak memory usage
+    if hasattr(pipeline, 'enable_vae_tiling'):
+        pipeline.enable_vae_tiling()
+        logger.info("  VAE tiling enabled (reduces memory usage)")
+
+    # Enable sliced attention for further memory savings
+    if hasattr(pipeline, 'enable_vae_slicing'):
+        pipeline.enable_vae_slicing()
+        logger.info("  VAE slicing enabled")
+
     generator = torch.Generator(device="cpu").manual_seed(seed)
 
     # Progress callback for real-time updates

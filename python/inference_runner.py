@@ -37,27 +37,28 @@ def progress_callback(pct: float, message: str):
 
 
 def handle_generation_task(job: dict) -> tuple[list[str], dict]:
-    """Handle preview or render generation tasks."""
+    """Handle preview or render generation tasks (single or multiple scenes)."""
     from lib.pipeline import setup_pipeline
     from lib.inference import generate_preview_frame
 
-    task_id = job["task_id"]
     task_type = job["task_type"]
-    scene = job["scene"]
     project = job["project"]
     model_path = job["model_path"]
     model_config = job.get("model_config", {})
     pipeline_config = job.get("pipeline_config", {})
     output_dir = Path(job["output_dir"])
-    last_frame_path = job.get("last_frame_path")
 
-    logger.info(
-        f"Task {task_id[:8]}: {task_type} generation for scene {scene.get('id', '?')}"
-    )
+    # Support both single scene (old) and multiple scenes (new batched mode)
+    scenes = job.get("scenes", [job["scene"]]) if "scene" in job else job["scenes"]
+    if not isinstance(scenes, list):
+        scenes = [scenes]
+
+    total_scenes = len(scenes)
+    logger.info(f"Job: {task_type} generation for {total_scenes} scene(s)")
     logger.info(f"Model: {model_path}")
     logger.info(f"Output: {output_dir}")
 
-    emit({"type": "progress", "pct": 0, "message": "Loading model..."})
+    emit({"type": "progress", "pct": 0, "message": f"Loading model for {total_scenes} scenes..."})
 
     # Build config dict that setup_pipeline expects
     config = {
@@ -75,106 +76,141 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     mc = dict(model_config)
     mc["local_dir"] = Path(model_path).name
 
-    emit({"type": "progress", "pct": 5, "message": "Loading pipeline..."})
+    emit({"type": "progress", "pct": 5, "message": "Loading pipeline (once for all scenes)..."})
     pipe = setup_pipeline(config, model_config=mc)
+    logger.info(f"✓ Model loaded in VRAM - will process {total_scenes} scenes without reloading")
 
     emit({"type": "progress", "pct": 15, "message": "Starting generation..."})
 
-    # Build a simple seed manager that just returns the scene's seed
-    scene_id = scene.get("id", 0)
-    seed = scene.get("seed")
-
-    class SimpleSeedManager:
-        def get_or_create_seed(self, sid):
-            import random
-
-            return seed if seed else random.randint(0, 2**32 - 1)
-
-        def build_full_prompt(self, sid):
-            parts = []
-            style = project.get("style", "")
-            if style:
-                parts.append(style)
-            story = project.get("story_context", "")
-            if story:
-                parts.append(story)
-            sc = scene.get("scene_context", "")
-            if sc:
-                parts.append(sc)
-            parts.append(scene.get("prompt", ""))
-            return ", ".join(p for p in parts if p)
-
-    seed_mgr = SimpleSeedManager()
-
-    output_filename = f"scene_{scene_id:03d}_{task_type}.mp4"
-    output_path = str(output_dir / output_filename)
-
-    # Hook into tqdm to report progress
+    # Hook into tqdm to report progress (do this once for all scenes)
     _original_tqdm = None
     try:
         import tqdm
-
         _original_tqdm = tqdm.tqdm
+
+        current_scene_progress = {"idx": 0, "total": total_scenes}
 
         class ProgressTqdm(tqdm.tqdm):
             def update(self, n=1):
                 super().update(n)
                 if self.total and self.total > 0:
-                    pct = (self.n / self.total) * 100
-                    emit(
-                        {
-                            "type": "progress",
-                            "pct": pct,
-                            "message": f"Step {self.n}/{self.total}",
-                        }
-                    )
+                    scene_pct = (self.n / self.total) * 100
+                    # Overall progress: 15% (loading) + 80% (generation) + 5% (finalize)
+                    base_pct = 15 + (current_scene_progress["idx"] / total_scenes) * 80
+                    scene_contribution = (scene_pct / 100) * (80 / total_scenes)
+                    overall_pct = base_pct + scene_contribution
+
+                    emit({
+                        "type": "progress",
+                        "pct": overall_pct,
+                        "message": f"Scene {current_scene_progress['idx']+1}/{total_scenes} - Step {self.n}/{self.total}",
+                    })
 
         tqdm.tqdm = ProgressTqdm
-        # Also patch tqdm.auto
         if hasattr(tqdm, "auto"):
             tqdm.auto.tqdm = ProgressTqdm
     except ImportError:
         pass
 
-    success, lastframe_path = generate_preview_frame(
-        prompt=scene.get("prompt", ""),
-        negative_prompt=scene.get("negative_prompt", ""),
-        config=config,
-        output_path=output_path,
-        scene_id=scene_id,
-        seed_manager=seed_mgr,
-        pipeline=pipe,
-        previous_frame_path=last_frame_path,
-        output_base=str(output_dir),
-        model_config=mc,
-    )
+    # Process all scenes sequentially with the same loaded model
+    all_files = []
+    all_metadata = []
+    last_frame_path = job.get("last_frame_path")  # Initial continuity frame
+
+    for scene_idx, scene in enumerate(scenes):
+        current_scene_progress["idx"] = scene_idx
+        scene_id = scene.get("id", scene_idx)
+        task_id = scene.get("task_id", job.get("task_id", "unknown"))
+        seed = scene.get("seed")
+
+        logger.info(f"[Scene {scene_idx+1}/{total_scenes}] Processing scene_id={scene_id}, task_id={task_id[:8]}")
+
+        # Build a simple seed manager for this scene
+        class SimpleSeedManager:
+            def get_or_create_seed(self, sid):
+                import random
+                return seed if seed else random.randint(0, 2**32 - 1)
+
+            def build_full_prompt(self, sid):
+                parts = []
+                style = project.get("style", "")
+                if style:
+                    parts.append(style)
+                story = project.get("story_context", "")
+                if story:
+                    parts.append(story)
+                sc = scene.get("scene_context", "")
+                if sc:
+                    parts.append(sc)
+                parts.append(scene.get("prompt", ""))
+                return ", ".join(p for p in parts if p)
+
+        seed_mgr = SimpleSeedManager()
+
+        output_filename = f"scene_{scene_id:03d}_{task_type}.mp4"
+        output_path = str(output_dir / output_filename)
+
+        base_progress = 15 + (scene_idx / total_scenes) * 80
+        emit({
+            "type": "progress",
+            "pct": base_progress,
+            "message": f"Generating scene {scene_idx+1}/{total_scenes}..."
+        })
+
+        success, new_lastframe = generate_preview_frame(
+            prompt=scene.get("prompt", ""),
+            negative_prompt=scene.get("negative_prompt", ""),
+            config=config,
+            output_path=output_path,
+            scene_id=scene_id,
+            seed_manager=seed_mgr,
+            pipeline=pipe,
+            previous_frame_path=last_frame_path,
+            output_base=str(output_dir),
+            model_config=mc,
+        )
+
+        if not success:
+            raise RuntimeError(f"Generation failed for scene {scene_id}")
+
+        # Use this scene's last frame for the next scene's continuity
+        last_frame_path = new_lastframe
+
+        # Collect metadata for this scene
+        actual_seed = seed_mgr.get_or_create_seed(scene_id)
+        scene_metadata = {
+            "task_id": task_id,
+            "scene_id": scene_id,
+            "seed": actual_seed,
+            "width": pipeline_config.get("width"),
+            "height": pipeline_config.get("height"),
+            "fps": pipeline_config.get("fps", 24),
+            "filename": output_filename,
+        }
+
+        output_file = output_dir / output_filename
+        if output_file.exists():
+            scene_metadata["file_size"] = output_file.stat().st_size
+
+        all_files.append(output_filename)
+        all_metadata.append(scene_metadata)
+
+        logger.info(f"[Scene {scene_idx+1}/{total_scenes}] ✓ Complete: {output_filename}")
 
     # Restore tqdm
     if _original_tqdm:
         import tqdm
-
         tqdm.tqdm = _original_tqdm
 
-    if not success:
-        raise RuntimeError("Generation returned failure")
+    emit({"type": "progress", "pct": 95, "message": f"All {total_scenes} scenes generated!"})
 
-    # Collect metadata
-    actual_seed = seed_mgr.get_or_create_seed(scene_id)
-    files = [output_filename]
+    # Return all files and combined metadata
     metadata = {
-        "scene_id": scene_id,
-        "seed": actual_seed,
-        "width": pipeline_config.get("width"),
-        "height": pipeline_config.get("height"),
-        "fps": pipeline_config.get("fps", 24),
+        "total_scenes": total_scenes,
+        "scenes": all_metadata,
     }
 
-    # Get file size
-    output_file = output_dir / output_filename
-    if output_file.exists():
-        metadata["file_size"] = output_file.stat().st_size
-
-    return files, metadata
+    return all_files, metadata
 
 
 def handle_upscale_task(job: dict) -> tuple[list[str], dict]:

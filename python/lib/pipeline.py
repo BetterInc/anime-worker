@@ -67,6 +67,15 @@ def fix_text_encoder_weight_tying(pipe):
 
 def setup_pipeline(config, model_config=None):
     """Setup model pipeline. Auto-detects hardware and picks the best loading strategy."""
+    # Configure PyTorch memory allocator to reduce fragmentation
+    import os
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
+    # Clear any existing CUDA cache before loading model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        logger.info("Cleared CUDA cache before model loading")
+
     logger.info(f"PyTorch version: {torch.__version__}")
     logger.info(f"CUDA available: {torch.cuda.is_available()}")
 
