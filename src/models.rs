@@ -115,10 +115,16 @@ pub async fn download_model(
     info!("Available disk space: {:.1} GB", available_gb);
     info!("Model size: {:.1} GB", model_size_gb);
 
-    if available_gb > 0.0 && available_gb < model_size_gb * 1.5 {
-        warn!(
-            "Low disk space: {:.1} GB available, but model requires ~{:.1} GB",
-            available_gb, model_size_gb
+    // Fail if insufficient disk space (require 10% buffer)
+    let required_space = model_size_gb / 0.9; // Account for 10% buffer
+    if available_gb > 0.0 && available_gb < required_space {
+        anyhow::bail!(
+            "Insufficient disk space: {:.1} GB available, but model requires {:.1} GB ({:.1} GB + 10% buffer). \
+             Free up at least {:.1} GB before downloading this model.",
+            available_gb,
+            required_space,
+            model_size_gb,
+            required_space - available_gb
         );
     }
 

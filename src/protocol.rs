@@ -17,6 +17,8 @@ pub enum WorkerMessage {
         name: String,
         gpus: Vec<GpuInfo>,
         ram_total_gb: f64,
+        cpu_cores: usize,
+        disk_space_gb: f64,
         platform: String,
         models_cached: Vec<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -26,6 +28,7 @@ pub enum WorkerMessage {
         worker_id: String,
         gpus: Vec<GpuInfo>,
         ram_free_gb: f64,
+        disk_space_gb: f64,
         models_cached: Vec<String>,
     },
     RequestTask {

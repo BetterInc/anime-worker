@@ -9,6 +9,7 @@ mod hardware;
 mod models;
 mod protocol;
 mod runner;
+mod setup;
 mod upload;
 
 use std::sync::Arc;
@@ -64,6 +65,9 @@ enum Commands {
 
     /// Setup Python environment (create venv, install requirements)
     SetupPython,
+
+    /// Interactive configuration wizard — creates config.toml in the current directory
+    Setup,
 }
 
 #[tokio::main]
@@ -253,6 +257,23 @@ async fn main() -> anyhow::Result<()> {
                     println!("  - {}", model);
                 }
             }
+        }
+
+        Commands::Setup => {
+            // Target: ./config.toml in the current working directory (not ~/.anime-worker).
+            // This matches the documented usage of `./anime-worker setup`.
+            let config_path = cli
+                .config
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from("config.toml"));
+
+            // Locate the python/ directory (same logic as SetupPython).
+            let scripts_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.join("python")))
+                .unwrap_or_else(|| std::path::PathBuf::from("python"));
+
+            setup::run(&config_path, &scripts_dir)?;
         }
 
         Commands::SetupPython => {

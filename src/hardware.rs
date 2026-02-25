@@ -85,6 +85,11 @@ pub fn platform() -> &'static str {
     }
 }
 
+/// Get number of CPU cores (logical processors).
+pub fn cpu_cores() -> usize {
+    num_cpus::get()
+}
+
 /// Get available disk space in GB for a given path (cross-platform).
 /// Returns 0.0 if unable to determine.
 pub fn available_disk_space_gb(path: &std::path::Path) -> f64 {

@@ -47,12 +47,19 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     let gpus = hardware::detect_gpus();
     let cached = models::list_cached_models(&config.models_dir);
 
+    // Apply resource limits from constraints (if configured)
+    let cpu_cores = config.constraints.cpu_limit.unwrap_or_else(|| hardware::cpu_cores());
+    let ram_total_gb = config.constraints.ram_limit_gb.unwrap_or_else(|| hardware::total_ram_gb());
+    let disk_space_gb = config.constraints.disk_limit_gb.unwrap_or_else(|| hardware::available_disk_space_gb(&config.models_dir));
+
     let hello = WorkerMessage::Hello {
         worker_id: config.worker_id.clone(),
         api_key: config.api_key.clone(),
         name: config.worker_name.clone(),
         gpus: gpus.clone(),
-        ram_total_gb: hardware::total_ram_gb(),
+        ram_total_gb,
+        cpu_cores,
+        disk_space_gb,
         platform: hardware::platform().to_string(),
         models_cached: cached.clone(),
         constraints: Some(config.constraints.clone()),
@@ -100,10 +107,15 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
             interval.tick().await;
             let gpus = hardware::detect_gpus();
             let cached = models::list_cached_models(&hb_config.models_dir);
+            // Apply disk limit from constraints (if configured)
+            let disk_space_gb = hb_config.constraints.disk_limit_gb
+                .unwrap_or_else(|| hardware::available_disk_space_gb(&hb_config.models_dir));
+
             let msg = WorkerMessage::Heartbeat {
                 worker_id: hb_config.worker_id.clone(),
                 gpus,
                 ram_free_gb: hardware::free_ram_gb(),
+                disk_space_gb,
                 models_cached: cached,
             };
             let json = match serde_json::to_string(&msg) {

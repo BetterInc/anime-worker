@@ -23,6 +23,16 @@ pub struct WorkerConstraints {
 
     /// Minimum VRAM required (GB) - used for filtering tasks
     pub min_vram_gb: Option<f64>,
+
+    /// Resource limits (optional - user can restrict worker's resource usage)
+    /// CPU cores to allocate (limits parallelism)
+    pub cpu_limit: Option<usize>,
+
+    /// RAM limit in GB (worker will report this as max, not actual hardware)
+    pub ram_limit_gb: Option<f64>,
+
+    /// Disk space limit in GB (worker will report this as available)
+    pub disk_limit_gb: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,6 +69,11 @@ fn default_models_dir() -> PathBuf {
 
 fn default_python_path() -> String {
     discover_python().unwrap_or_else(|| "python3".to_string())
+}
+
+/// Public wrapper so the setup wizard can call the same discovery logic.
+pub fn default_python_scripts_dir_pub() -> PathBuf {
+    default_python_scripts_dir()
 }
 
 fn default_python_scripts_dir() -> PathBuf {
@@ -229,7 +244,7 @@ pub fn validate_python(python_path: &str) -> Result<String, String> {
 
 impl WorkerConfig {
     /// Load config from file and apply auto-detection
-    pub fn load(path: &PathBuf) -> anyhow::Result<Self> {
+    pub fn load(path: &std::path::Path) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let mut config: WorkerConfig = toml::from_str(&content)?;
 
@@ -254,7 +269,7 @@ impl WorkerConfig {
     }
 
     /// Save config to file
-    pub fn save(&self, path: &PathBuf) -> anyhow::Result<()> {
+    pub fn save(&self, path: &std::path::Path) -> anyhow::Result<()> {
         let dir = path.parent().unwrap_or(std::path::Path::new("."));
         std::fs::create_dir_all(dir)?;
         let content = toml::to_string_pretty(self)?;
