@@ -92,18 +92,14 @@ pub enum ServerMessage {
     HelloAck {
         server_version: String,
     },
-    TaskAssign {
-        task_id: String,
+    JobBatchAssign {
         job_id: String,
         task_type: String,
-        scene: serde_json::Value,
-        project: serde_json::Value,
+        tasks: Vec<serde_json::Value>,  // Array of {task_id, scene_id, scene, upload_url, ...}
+        project: Box<serde_json::Value>,
         model_id: String,
         model_config: Box<ModelConfig>,
         pipeline_config: Box<serde_json::Value>,
-        upload_url: String,
-        last_frame_url: Option<String>,
-        input_video_url: Option<String>,
     },
     TaskCancel {
         task_id: String,
