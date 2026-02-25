@@ -11,6 +11,7 @@ Pillow
 numpy
 opencv-python-headless
 xformers
+ftfy
 
 # Upscaling dependencies
 realesrgan>=0.3.0
