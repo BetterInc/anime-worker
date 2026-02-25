@@ -12,6 +12,7 @@ numpy
 opencv-python-headless
 xformers
 ftfy
+imageio-ffmpeg
 
 # Upscaling dependencies
 realesrgan>=0.3.0
