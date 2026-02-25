@@ -46,18 +46,6 @@ pub async fn upload_file(
     Ok(())
 }
 
-/// Upload a lastframe PNG (for continuity chaining).
-#[allow(dead_code)]
-pub async fn upload_lastframe(
-    server_url: &str,
-    task_id: &str,
-    api_key: &str,
-    file_path: &Path,
-) -> anyhow::Result<()> {
-    let upload_path = format!("/worker/upload/{}/lastframe", task_id);
-    upload_file(server_url, &upload_path, api_key, file_path).await
-}
-
 /// Download a file from the server (e.g., lastframe from predecessor task).
 pub async fn download_file(
     server_url: &str,

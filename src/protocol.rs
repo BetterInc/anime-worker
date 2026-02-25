@@ -75,12 +75,6 @@ pub enum WorkerMessage {
         result_filename: String,
         metadata: serde_json::Value,
     },
-    #[allow(dead_code)]
-    TaskFailed {
-        task_id: String,
-        error_message: String,
-        phase: String,
-    },
 }
 
 // ---------------------------------------------------------------------------
