@@ -286,7 +286,7 @@ async fn process_job_batch<S>(
     active_inference: &Arc<Mutex<Option<runner::RunningInference>>>,
     job_id: &str,
     task_type: &str,
-    tasks: Vec<serde_json::Value>,  // From API: [{task_id, scene_id, scene, upload_url, ...}]
+    tasks: Vec<serde_json::Value>, // From API: [{task_id, scene_id, scene, upload_url, ...}]
     project: Box<serde_json::Value>,
     model_id: &str,
     model_config: Box<crate::protocol::ModelConfig>,
@@ -308,7 +308,10 @@ where
         task_type
     );
 
-    let first_task_id = tasks[0].get("task_id").and_then(|v| v.as_str()).unwrap_or("unknown");
+    let first_task_id = tasks[0]
+        .get("task_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
 
     // 1. Ensure model is cached
     if !models::is_model_cached(&config.models_dir, &model_config.local_dir) {
@@ -345,7 +348,8 @@ where
     }
 
     // 2. Download last frame if first task needs it
-    let last_frame_path = if let Some(url) = tasks[0].get("last_frame_url").and_then(|v| v.as_str()) {
+    let last_frame_path = if let Some(url) = tasks[0].get("last_frame_url").and_then(|v| v.as_str())
+    {
         let dest = config
             .models_dir
             .parent()
@@ -371,10 +375,17 @@ where
     let scene_tasks: Vec<SceneTask> = tasks
         .iter()
         .map(|t| {
-            let task_id = t.get("task_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let task_id = t
+                .get("task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let mut scene = t.get("scene").cloned().unwrap_or(serde_json::json!({}));
             if let Some(obj) = scene.as_object_mut() {
-                obj.insert("task_id".to_string(), serde_json::Value::String(task_id.clone()));
+                obj.insert(
+                    "task_id".to_string(),
+                    serde_json::Value::String(task_id.clone()),
+                );
             }
             SceneTask { task_id, scene }
         })
@@ -427,7 +438,9 @@ where
                 if let Some(scenes_meta) = metadata.get("scenes").and_then(|v| v.as_array()) {
                     for scene_meta in scenes_meta.iter() {
                         if let Some(task_id) = scene_meta.get("task_id").and_then(|v| v.as_str()) {
-                            if let Some(filename) = scene_meta.get("filename").and_then(|v| v.as_str()) {
+                            if let Some(filename) =
+                                scene_meta.get("filename").and_then(|v| v.as_str())
+                            {
                                 completed_scenes.insert(
                                     task_id.to_string(),
                                     (filename.to_string(), scene_meta.clone()),
@@ -446,12 +459,16 @@ where
     // 7. Upload results for each task
     for task in &tasks {
         let task_id = task.get("task_id").and_then(|v| v.as_str()).unwrap_or("");
-        let upload_url = task.get("upload_url").and_then(|v| v.as_str()).unwrap_or("");
+        let upload_url = task
+            .get("upload_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
 
         if let Some((filename, metadata)) = completed_scenes.get(task_id) {
             let file_path = output_dir.join(filename);
 
-            upload::upload_file(&config.server_url, upload_url, &config.api_key, &file_path).await?;
+            upload::upload_file(&config.server_url, upload_url, &config.api_key, &file_path)
+                .await?;
 
             let complete_msg = WorkerMessage::TaskComplete {
                 task_id: task_id.to_string(),
@@ -469,209 +486,6 @@ where
     *active_inference.lock().await = None;
 
     info!("✓ Job {} complete ({} scenes)", &job_id[..8], tasks.len());
-
-    Ok(())
-}
-
-async fn process_task<S>(
-    config: &WorkerConfig,
-    write: &Arc<Mutex<S>>,
-    active_inference: &Arc<Mutex<Option<runner::RunningInference>>>,
-    task_id: &str,
-    _job_id: &str,
-    task_type: &str,
-    scene: serde_json::Value,
-    project: serde_json::Value,
-    model_id: &str,
-    model_config: crate::protocol::ModelConfig,
-    pipeline_config: serde_json::Value,
-    upload_url: &str,
-    last_frame_url: Option<&str>,
-    input_video_url: Option<&str>,
-) -> anyhow::Result<()>
-where
-    S: SinkExt<Message> + Unpin + Send + 'static,
-    <S as futures_util::Sink<Message>>::Error: std::error::Error + Send + Sync + 'static,
-{
-    // 1. Ensure model is cached
-    if !models::is_model_cached(&config.models_dir, &model_config.local_dir) {
-        info!("Model {} not cached, downloading...", model_id);
-        let task_id_owned = task_id.to_string();
-        let model_id_owned = model_id.to_string();
-        let write_clone = write.clone();
-
-        // Report model download progress
-        let progress_cb = move |downloaded_gb: f64, total_gb: f64| {
-            let msg = WorkerMessage::ModelProgress {
-                task_id: task_id_owned.clone(),
-                model_id: model_id_owned.clone(),
-                downloaded_gb,
-                total_gb,
-            };
-            // Fire-and-forget (blocking context)
-            if let Ok(json) = serde_json::to_string(&msg) {
-                let write = write_clone.clone();
-                // Use Handle::current() to spawn from blocking context
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    handle.spawn(async move {
-                        let _ = write.lock().await.send(Message::Text(json)).await;
-                    });
-                }
-            }
-        };
-
-        models::download_model(
-            &model_config.hf_repo,
-            &config.models_dir,
-            &model_config.local_dir,
-            model_config.model_size_gb,
-            progress_cb,
-        )
-        .await?;
-    }
-
-    // 2. Download lastframe if needed for continuity
-    let last_frame_path = if let Some(url) = last_frame_url {
-        let dest = config
-            .models_dir
-            .parent()
-            .unwrap_or(&config.models_dir)
-            .join("tmp")
-            .join(format!("{}_lastframe.png", task_id));
-        upload::download_file(&config.server_url, url, &config.api_key, &dest).await?;
-        Some(dest)
-    } else {
-        None
-    };
-
-    // 2b. Download input video if needed (for upscale tasks)
-    let input_video_path = if let Some(url) = input_video_url {
-        let dest = config
-            .models_dir
-            .parent()
-            .unwrap_or(&config.models_dir)
-            .join("tmp")
-            .join(format!("{}_input.mp4", task_id));
-        upload::download_file(&config.server_url, url, &config.api_key, &dest).await?;
-        info!("Downloaded input video to: {}", dest.display());
-        Some(dest)
-    } else {
-        None
-    };
-
-    // 3. Create output directory
-    let output_dir = config
-        .models_dir
-        .parent()
-        .unwrap_or(&config.models_dir)
-        .join("output")
-        .join(task_id);
-    tokio::fs::create_dir_all(&output_dir).await?;
-
-    // 4. Spawn Python inference
-    let model_path = config
-        .models_dir
-        .join(&model_config.local_dir)
-        .to_string_lossy()
-        .to_string();
-
-    let job = InferenceJob {
-        task_id: task_id.to_string(),
-        task_type: task_type.to_string(),
-        scene: Some(scene),  // Single scene for backward compat
-        scenes: None,
-        project,
-        model_path,
-        model_config: serde_json::to_value(&model_config)?, // Send FULL config, not just .extra
-        pipeline_config,
-        output_dir: output_dir.to_string_lossy().to_string(),
-        last_frame_path: last_frame_path.map(|p| p.to_string_lossy().to_string()),
-        input_video_path: input_video_path.map(|p| p.to_string_lossy().to_string()),
-    };
-
-    let (mut output_rx, mut handle) =
-        runner::spawn_inference(&config.python_path, &config.python_scripts_dir, job).await?;
-
-    *active_inference.lock().await = None; // We'll set it after extracting outputs
-
-    // 5. Process Python output
-    let mut result_files = Vec::new();
-    let mut result_metadata = serde_json::Value::Null;
-
-    while let Some(output) = output_rx.recv().await {
-        match output {
-            PythonOutput::Progress { pct, message } => {
-                // Scale: model download = 0-10%, inference = 10-95%, upload = 95-100%
-                let scaled_pct = 10.0 + pct * 0.85;
-                let msg = WorkerMessage::TaskProgress {
-                    task_id: task_id.to_string(),
-                    progress: scaled_pct,
-                    message,
-                    phase: "generating".to_string(),
-                };
-                if let Ok(json) = serde_json::to_string(&msg) {
-                    let _ = write.lock().await.send(Message::Text(json)).await;
-                }
-            }
-            PythonOutput::Complete { files, metadata } => {
-                result_files = files;
-                result_metadata = metadata;
-            }
-            PythonOutput::Error { message } => {
-                anyhow::bail!("Python inference error: {}", message);
-            }
-        }
-    }
-
-    // 6. Wait for process to finish
-    let exit_code = runner::wait_for_completion(&mut handle).await?;
-    if exit_code != 0 {
-        anyhow::bail!("Python exited with code {}", exit_code);
-    }
-
-    // 7. Upload result files
-    for file_name in &result_files {
-        let file_path = output_dir.join(file_name);
-        if file_path.exists() {
-            // Report uploading phase
-            let msg = WorkerMessage::TaskProgress {
-                task_id: task_id.to_string(),
-                progress: 96.0,
-                message: format!("Uploading {}", file_name),
-                phase: "uploading".to_string(),
-            };
-            if let Ok(json) = serde_json::to_string(&msg) {
-                let _ = write.lock().await.send(Message::Text(json)).await;
-            }
-
-            upload::upload_file(&config.server_url, upload_url, &config.api_key, &file_path)
-                .await?;
-
-            // Upload lastframe if it exists
-            let scene_id = result_metadata
-                .get("scene_id")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
-            let lastframe = output_dir.join(format!("scene_{:03}_lastframe.png", scene_id));
-            if lastframe.exists() {
-                upload::upload_lastframe(&config.server_url, task_id, &config.api_key, &lastframe)
-                    .await?;
-            }
-        }
-    }
-
-    // 8. Report completion
-    let complete_msg = WorkerMessage::TaskComplete {
-        task_id: task_id.to_string(),
-        result_filename: result_files.first().cloned().unwrap_or_default(),
-        metadata: result_metadata,
-    };
-    if let Ok(json) = serde_json::to_string(&complete_msg) {
-        let _ = write.lock().await.send(Message::Text(json)).await;
-    }
-
-    // 9. Cleanup output dir
-    let _ = tokio::fs::remove_dir_all(&output_dir).await;
 
     Ok(())
 }

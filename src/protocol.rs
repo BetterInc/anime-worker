@@ -95,7 +95,7 @@ pub enum ServerMessage {
     JobBatchAssign {
         job_id: String,
         task_type: String,
-        tasks: Vec<serde_json::Value>,  // Array of {task_id, scene_id, scene, upload_url, ...}
+        tasks: Vec<serde_json::Value>, // Array of {task_id, scene_id, scene, upload_url, ...}
         project: Box<serde_json::Value>,
         model_id: String,
         model_config: Box<ModelConfig>,

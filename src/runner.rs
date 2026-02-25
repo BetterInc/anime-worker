@@ -40,12 +40,12 @@ pub struct SceneTask {
 /// The job configuration sent to Python on stdin.
 #[derive(Debug, Serialize)]
 pub struct InferenceJob {
-    pub task_id: String,  // For backward compat, will be first scene's task_id
+    pub task_id: String, // For backward compat, will be first scene's task_id
     pub task_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub scene: Option<serde_json::Value>,  // For backward compat (single scene)
+    pub scene: Option<serde_json::Value>, // For backward compat (single scene)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub scenes: Option<Vec<SceneTask>>,  // New: batch of scenes
+    pub scenes: Option<Vec<SceneTask>>, // New: batch of scenes
     pub project: serde_json::Value,
     pub model_path: String,
     pub model_config: serde_json::Value,
