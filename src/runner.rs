@@ -174,4 +174,3 @@ pub async fn spawn_inference(
     Ok((output_rx, handle))
 }
 
-/// Wait for the inference process to complete and return the exit code.
