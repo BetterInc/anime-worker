@@ -48,18 +48,19 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     let cached = models::list_cached_models(&config.models_dir);
 
     // Apply resource limits from constraints (if configured)
+    // If no limits set, use 90% of actual hardware (10% buffer for system)
     let cpu_cores = config
         .constraints
         .cpu_limit
-        .unwrap_or_else(hardware::cpu_cores);
+        .unwrap_or_else(|| (hardware::cpu_cores() as f64 * 0.9).max(1.0) as usize);
     let ram_total_gb = config
         .constraints
         .ram_limit_gb
-        .unwrap_or_else(hardware::total_ram_gb);
+        .unwrap_or_else(|| hardware::total_ram_gb() * 0.9);
     let disk_space_gb = config
         .constraints
         .disk_limit_gb
-        .unwrap_or_else(|| hardware::available_disk_space_gb(&config.models_dir));
+        .unwrap_or_else(|| hardware::available_disk_space_gb(&config.models_dir) * 0.9);
 
     let hello = WorkerMessage::Hello {
         worker_id: config.worker_id.clone(),
@@ -117,10 +118,11 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
             let gpus = hardware::detect_gpus();
             let cached = models::list_cached_models(&hb_config.models_dir);
             // Apply disk limit from constraints (if configured)
+            // If no limit set, use 90% of available (10% buffer)
             let disk_space_gb = hb_config
                 .constraints
                 .disk_limit_gb
-                .unwrap_or_else(|| hardware::available_disk_space_gb(&hb_config.models_dir));
+                .unwrap_or_else(|| hardware::available_disk_space_gb(&hb_config.models_dir) * 0.9);
 
             let msg = WorkerMessage::Heartbeat {
                 worker_id: hb_config.worker_id.clone(),
