@@ -158,6 +158,11 @@ def setup_pipeline(config, model_config=None):
                 str(model_path), device_map="balanced", **load_kwargs
             )
             fix_text_encoder_weight_tying(pipe)
+            # Move VAE to GPU if it was loaded separately
+            if hasattr(pipe, 'vae') and pipe.vae is not None:
+                vae_device = f"cuda:{best_gpu_id}"
+                pipe.vae = pipe.vae.to(vae_device)
+                logger.info(f"  VAE moved to {vae_device}")
             logger.info(f"  Model split across {len(gpus)} GPUs via device_map ({total_free_vram:.0f}GB total free)")
             loaded = True
         except Exception as e:
