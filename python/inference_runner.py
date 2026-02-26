@@ -58,7 +58,13 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     logger.info(f"Model: {model_path}")
     logger.info(f"Output: {output_dir}")
 
-    emit({"type": "progress", "pct": 0, "message": f"Loading model for {total_scenes} scenes..."})
+    emit(
+        {
+            "type": "progress",
+            "pct": 0,
+            "message": f"Loading model for {total_scenes} scenes...",
+        }
+    )
 
     # Build config dict that setup_pipeline expects
     config = {
@@ -76,9 +82,17 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     mc = dict(model_config)
     mc["local_dir"] = Path(model_path).name
 
-    emit({"type": "progress", "pct": 5, "message": "Loading pipeline (once for all scenes)..."})
+    emit(
+        {
+            "type": "progress",
+            "pct": 5,
+            "message": "Loading pipeline (once for all scenes)...",
+        }
+    )
     pipe = setup_pipeline(config, model_config=mc)
-    logger.info(f"✓ Model loaded in VRAM - will process {total_scenes} scenes without reloading")
+    logger.info(
+        f"✓ Model loaded in VRAM - will process {total_scenes} scenes without reloading"
+    )
 
     emit({"type": "progress", "pct": 15, "message": "Starting generation..."})
 
@@ -86,6 +100,7 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
     _original_tqdm = None
     try:
         import tqdm
+
         _original_tqdm = tqdm.tqdm
 
         current_scene_progress = {"idx": 0, "total": total_scenes}
@@ -100,11 +115,13 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
                     scene_contribution = (scene_pct / 100) * (80 / total_scenes)
                     overall_pct = base_pct + scene_contribution
 
-                    emit({
-                        "type": "progress",
-                        "pct": overall_pct,
-                        "message": f"Scene {current_scene_progress['idx']+1}/{total_scenes} - Step {self.n}/{self.total}",
-                    })
+                    emit(
+                        {
+                            "type": "progress",
+                            "pct": overall_pct,
+                            "message": f"Scene {current_scene_progress['idx'] + 1}/{total_scenes} - Step {self.n}/{self.total}",
+                        }
+                    )
 
         tqdm.tqdm = ProgressTqdm
         if hasattr(tqdm, "auto"):
@@ -123,12 +140,15 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
         task_id = scene.get("task_id", job.get("task_id", "unknown"))
         seed = scene.get("seed")
 
-        logger.info(f"[Scene {scene_idx+1}/{total_scenes}] Processing scene_id={scene_id}, task_id={task_id[:8]}")
+        logger.info(
+            f"[Scene {scene_idx + 1}/{total_scenes}] Processing scene_id={scene_id}, task_id={task_id[:8]}"
+        )
 
         # Build a simple seed manager for this scene
         class SimpleSeedManager:
             def get_or_create_seed(self, sid):
                 import random
+
                 return seed if seed else random.randint(0, 2**32 - 1)
 
             def build_full_prompt(self, sid):
@@ -151,11 +171,13 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
         output_path = str(output_dir / output_filename)
 
         base_progress = 15 + (scene_idx / total_scenes) * 80
-        emit({
-            "type": "progress",
-            "pct": base_progress,
-            "message": f"Generating scene {scene_idx+1}/{total_scenes}..."
-        })
+        emit(
+            {
+                "type": "progress",
+                "pct": base_progress,
+                "message": f"Generating scene {scene_idx + 1}/{total_scenes}...",
+            }
+        )
 
         success, new_lastframe = generate_preview_frame(
             prompt=scene.get("prompt", ""),
@@ -203,14 +225,23 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
 
         all_metadata.append(scene_metadata)
 
-        logger.info(f"[Scene {scene_idx+1}/{total_scenes}] ✓ Complete: {output_filename}")
+        logger.info(
+            f"[Scene {scene_idx + 1}/{total_scenes}] ✓ Complete: {output_filename}"
+        )
 
     # Restore tqdm
     if _original_tqdm:
         import tqdm
+
         tqdm.tqdm = _original_tqdm
 
-    emit({"type": "progress", "pct": 95, "message": f"All {total_scenes} scenes generated!"})
+    emit(
+        {
+            "type": "progress",
+            "pct": 95,
+            "message": f"All {total_scenes} scenes generated!",
+        }
+    )
 
     # Return all files and combined metadata
     metadata = {

@@ -438,7 +438,7 @@ where
                     let _ = write.lock().await.send(Message::Text(json)).await;
                 }
             }
-            PythonOutput::Complete { metadata } => {
+            PythonOutput::Complete { files: _, metadata } => {
                 if let Some(scenes_meta) = metadata.get("scenes").and_then(|v| v.as_array()) {
                     for scene_meta in scenes_meta.iter() {
                         if let Some(task_id) = scene_meta.get("task_id").and_then(|v| v.as_str()) {
@@ -469,10 +469,25 @@ where
             .unwrap_or("");
 
         if let Some((filename, metadata)) = completed_scenes.get(task_id) {
+            // Upload main video file
             let file_path = output_dir.join(filename);
-
             upload::upload_file(&config.server_url, upload_url, &config.api_key, &file_path)
                 .await?;
+
+            // Upload lastframe if it exists in metadata
+            if let Some(lastframe) = metadata.get("lastframe").and_then(|v| v.as_str()) {
+                let lastframe_path = output_dir.join(lastframe);
+                if lastframe_path.exists() {
+                    upload::upload_file(
+                        &config.server_url,
+                        upload_url,
+                        &config.api_key,
+                        &lastframe_path,
+                    )
+                    .await?;
+                    info!("  Uploaded lastframe: {}", lastframe);
+                }
+            }
 
             let complete_msg = WorkerMessage::TaskComplete {
                 task_id: task_id.to_string(),
