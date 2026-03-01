@@ -9,8 +9,7 @@ use tracing::{info, warn};
 /// Requires both model_index.json AND .download_complete marker.
 pub fn is_model_cached(models_dir: &Path, local_dir: &str) -> bool {
     let model_path = models_dir.join(local_dir);
-    model_path.join("model_index.json").exists()
-        && model_path.join(".download_complete").exists()
+    model_path.join("model_index.json").exists() && model_path.join(".download_complete").exists()
 }
 
 /// List all fully cached model directories.
@@ -22,9 +21,7 @@ pub fn list_cached_models(models_dir: &Path) -> Vec<String> {
         for entry in entries.flatten() {
             let path = entry.path();
             // Only report as cached if download completed successfully
-            if path.join("model_index.json").exists()
-                && path.join(".download_complete").exists()
-            {
+            if path.join("model_index.json").exists() && path.join(".download_complete").exists() {
                 if let Some(name) = entry.file_name().to_str() {
                     local_dirs.push(name.to_string());
                 }
@@ -124,9 +121,17 @@ pub async fn download_model(
         use std::process::{Command, Stdio};
 
         let python_path = if cfg!(windows) {
-            std::env::current_dir()?.join("python").join("venv").join("Scripts").join("python.exe")
+            std::env::current_dir()?
+                .join("python")
+                .join("venv")
+                .join("Scripts")
+                .join("python.exe")
         } else {
-            std::env::current_dir()?.join("python").join("venv").join("bin").join("python")
+            std::env::current_dir()?
+                .join("python")
+                .join("venv")
+                .join("bin")
+                .join("python")
         };
 
         if !python_path.exists() {
@@ -170,7 +175,9 @@ pub async fn download_model(
                 Ok(Some(status)) => {
                     if !status.success() {
                         // Capture stderr for error details
-                        let stderr = child.stderr.take()
+                        let stderr = child
+                            .stderr
+                            .take()
                             .map(|mut s| {
                                 use std::io::Read;
                                 let mut buf = String::new();
@@ -223,8 +230,11 @@ pub async fn download_model(
 
         // Create marker file to indicate download is complete
         let marker_path = model_path_buf.join(".download_complete");
-        std::fs::write(&marker_path, format!("Downloaded: {}\nSize: {:.2} GB\n", hf_repo, model_size_gb))
-            .map_err(|e| anyhow::anyhow!("Failed to create download marker: {}", e))?;
+        std::fs::write(
+            &marker_path,
+            format!("Downloaded: {}\nSize: {:.2} GB\n", hf_repo, model_size_gb),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create download marker: {}", e))?;
         info!("Created download complete marker");
 
         Ok(())
