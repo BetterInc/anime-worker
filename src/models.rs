@@ -5,19 +5,26 @@ use std::path::{Path, PathBuf};
 
 use tracing::{info, warn};
 
-/// Check if a model is cached locally (has model_index.json).
+/// Check if a model is fully cached locally.
+/// Requires both model_index.json AND .download_complete marker.
 pub fn is_model_cached(models_dir: &Path, local_dir: &str) -> bool {
     let model_path = models_dir.join(local_dir);
     model_path.join("model_index.json").exists()
+        && model_path.join(".download_complete").exists()
 }
 
-/// List all cached model directories (those with model_index.json).
+/// List all fully cached model directories.
+/// Requires both model_index.json AND .download_complete marker.
 /// Returns model IDs (not local directory names) by mapping via model_configs.yaml
 pub fn list_cached_models(models_dir: &Path) -> Vec<String> {
     let mut local_dirs = Vec::new();
     if let Ok(entries) = std::fs::read_dir(models_dir) {
         for entry in entries.flatten() {
-            if entry.path().join("model_index.json").exists() {
+            let path = entry.path();
+            // Only report as cached if download completed successfully
+            if path.join("model_index.json").exists()
+                && path.join(".download_complete").exists()
+            {
                 if let Some(name) = entry.file_name().to_str() {
                     local_dirs.push(name.to_string());
                 }
@@ -91,26 +98,10 @@ pub async fn download_model(
 
     // Check available disk space before download
     let model_path_for_check = model_path.clone();
-    let available_gb = tokio::task::spawn_blocking(move || -> anyhow::Result<f64> {
-        use sysinfo::Disks;
-
-        let disks = Disks::new_with_refreshed_list();
-        let model_path_abs = model_path_for_check
-            .canonicalize()
-            .unwrap_or_else(|_| model_path_for_check.clone());
-
-        // Find the disk that contains the model path
-        for disk in &disks {
-            let mount_point = disk.mount_point();
-            if model_path_abs.starts_with(mount_point) {
-                let available_bytes = disk.available_space();
-                return Ok(available_bytes as f64 / (1024.0 * 1024.0 * 1024.0));
-            }
-        }
-
-        Ok(0.0) // Couldn't determine disk space
+    let available_gb = tokio::task::spawn_blocking(move || -> f64 {
+        crate::hardware::available_disk_space_gb(&model_path_for_check)
     })
-    .await??;
+    .await?;
 
     info!("Available disk space: {:.1} GB", available_gb);
     info!("Model size: {:.1} GB", model_size_gb);
@@ -132,7 +123,11 @@ pub async fn download_model(
     let download_handle = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         use std::process::{Command, Stdio};
 
-        let python_path = std::env::current_dir()?.join("python/venv/bin/python");
+        let python_path = if cfg!(windows) {
+            std::env::current_dir()?.join("python").join("venv").join("Scripts").join("python.exe")
+        } else {
+            std::env::current_dir()?.join("python").join("venv").join("bin").join("python")
+        };
 
         if !python_path.exists() {
             return Err(anyhow::anyhow!(
@@ -142,6 +137,9 @@ pub async fn download_model(
         }
 
         info!("Using Python HuggingFace Hub to download (more reliable for large files)");
+
+        // Use forward slashes for Python compatibility on Windows
+        let model_path_python = model_path_str.replace('\\', "/");
 
         let mut child = Command::new(&python_path)
             .args([
@@ -154,7 +152,7 @@ pub async fn download_model(
                          local_dir_use_symlinks=False, \
                          resume_download=True\
                      )",
-                    hf_repo, model_path_str
+                    hf_repo, model_path_python
                 ),
             ])
             .stdout(Stdio::piped())
@@ -171,9 +169,19 @@ pub async fn download_model(
             match child.try_wait() {
                 Ok(Some(status)) => {
                     if !status.success() {
+                        // Capture stderr for error details
+                        let stderr = child.stderr.take()
+                            .map(|mut s| {
+                                use std::io::Read;
+                                let mut buf = String::new();
+                                s.read_to_string(&mut buf).ok();
+                                buf
+                            })
+                            .unwrap_or_default();
                         return Err(anyhow::anyhow!(
-                            "Model download failed with exit code: {}",
-                            status
+                            "Model download failed with exit code: {}\nError: {}",
+                            status,
+                            stderr.trim()
                         ));
                     }
                     info!("Model download process completed");
@@ -212,6 +220,12 @@ pub async fn download_model(
                 gb, model_size_gb
             );
         }
+
+        // Create marker file to indicate download is complete
+        let marker_path = model_path_buf.join(".download_complete");
+        std::fs::write(&marker_path, format!("Downloaded: {}\nSize: {:.2} GB\n", hf_repo, model_size_gb))
+            .map_err(|e| anyhow::anyhow!("Failed to create download marker: {}", e))?;
+        info!("Created download complete marker");
 
         Ok(())
     });

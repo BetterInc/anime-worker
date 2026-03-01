@@ -179,6 +179,14 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
             }
         )
 
+        # Progress callback for VAE decode and other phases
+        def scene_progress(pct, msg):
+            # Scale to this scene's portion of overall progress (15-95%)
+            base_pct = 15 + (scene_idx / total_scenes) * 80
+            scene_contribution = (pct / 100) * (80 / total_scenes)
+            overall_pct = base_pct + scene_contribution
+            emit({"type": "progress", "pct": overall_pct, "message": f"Scene {scene_idx + 1}: {msg}"})
+
         success, new_lastframe = generate_preview_frame(
             prompt=scene.get("prompt", ""),
             negative_prompt=scene.get("negative_prompt", ""),
@@ -190,6 +198,7 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
             previous_frame_path=last_frame_path,
             output_base=str(output_dir),
             model_config=mc,
+            progress_callback=scene_progress,
         )
 
         if not success:

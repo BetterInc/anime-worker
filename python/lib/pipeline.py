@@ -67,13 +67,23 @@ def fix_text_encoder_weight_tying(pipe):
 
 def setup_pipeline(config, model_config=None):
     """Setup model pipeline. Auto-detects hardware and picks the best loading strategy."""
-    # Configure PyTorch memory allocator to reduce fragmentation
+    import gc
     import os
+
+    # Configure PyTorch memory allocator to reduce fragmentation
     os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
-    # Clear any existing CUDA cache before loading model
+    # Aggressive cleanup before loading model
+    gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        # Report current VRAM usage
+        for i in range(torch.cuda.device_count()):
+            free, total = torch.cuda.mem_get_info(i)
+            free_gb = free / (1024**3)
+            total_gb = total / (1024**3)
+            logger.info(f"GPU {i} VRAM before load: {free_gb:.1f}GB free / {total_gb:.1f}GB total")
         logger.info("Cleared CUDA cache before model loading")
 
     logger.info(f"PyTorch version: {torch.__version__}")
@@ -208,10 +218,13 @@ def setup_pipeline(config, model_config=None):
     if not loaded:
         ram_total, ram_used = system_ram_gb()
         ram_free = ram_total - ram_used
-        if ram_free < model_memory_gb + 20:
-            raise RuntimeError(
-                f"Not enough RAM to load model: need ~{model_memory_gb + 20:.0f}GB free, "
-                f"have {ram_free:.0f}GB. Free up memory or use a smaller model."
+        # With group offload, we don't need full model in RAM - only active blocks
+        # Warn if low but don't block - let the system try
+        min_recommended_ram = 16  # 16GB minimum for group offload
+        if ram_free < min_recommended_ram:
+            logger.warning(
+                f"  Low RAM: {ram_free:.0f}GB free (recommended: {min_recommended_ram}GB+). "
+                f"May cause slowdowns or failures."
             )
         pipe = PipelineClass.from_pretrained(str(model_path), **load_kwargs)
         fix_text_encoder_weight_tying(pipe)
@@ -234,17 +247,51 @@ def setup_pipeline(config, model_config=None):
             pipe.enable_model_cpu_offload(gpu_id=best_gpu_id)
             logger.info(f"  CPU offload on GPU {best_gpu_id}")
 
+    # Try xformers first, fall back to PyTorch SDPA if not supported
+    xformers_enabled = False
+    try:
+        pipe.enable_xformers_memory_efficient_attention()
+        logger.info("  xformers enabled")
+        xformers_enabled = True
+    except (AttributeError, ImportError) as e:
+        logger.warning(f"  xformers not available ({e})")
+    except NotImplementedError as e:
+        # RTX 50-series (sm_120) and newer GPUs may not be supported by xformers yet
+        logger.warning(f"  xformers not supported on this GPU ({e})")
+    except Exception as e:
+        logger.warning(f"  xformers failed ({e})")
+
+    # If xformers failed, try PyTorch native SDPA (available in PyTorch 2.0+)
+    # Note: Wan models use custom attention that already uses SDPA internally,
+    # so we don't need to set a custom processor for them
+    if not xformers_enabled:
+        # Check if this is a Wan pipeline (uses custom attention, SDPA is built-in)
+        is_wan_pipeline = "Wan" in PipelineClass.__name__
+        if is_wan_pipeline:
+            logger.info("  Wan model uses native SDPA attention (no xformers needed)")
+        else:
+            try:
+                from diffusers.models.attention_processor import AttnProcessor2_0
+                if hasattr(pipe, "unet") and pipe.unet is not None:
+                    pipe.unet.set_attn_processor(AttnProcessor2_0())
+                    logger.info("  PyTorch SDPA enabled (fallback)")
+                elif hasattr(pipe, "transformer") and pipe.transformer is not None:
+                    pipe.transformer.set_attn_processor(AttnProcessor2_0())
+                    logger.info("  PyTorch SDPA enabled on transformer (fallback)")
+            except Exception as e:
+                logger.warning(f"  PyTorch SDPA fallback failed ({e}), using default attention")
+
+    # Other optimizations
     optimizations = [
-        ("xformers", "enable_xformers_memory_efficient_attention"),
         ("enable_vae_tiling", "enable_vae_tiling"),
         ("enable_vae_slicing", "enable_vae_slicing"),
     ]
     for opt_key, method_name in optimizations:
-        if opt_key == "xformers" or model_config.get(opt_key):
+        if model_config.get(opt_key, True):  # Enable by default
             try:
                 getattr(pipe, method_name)()
                 logger.info(f"  {opt_key} enabled")
-            except (AttributeError, ImportError):
+            except (AttributeError, ImportError) as e:
                 logger.warning(f"  {opt_key} not supported, skipping")
 
     logger.info(f"{model_path.name} loaded successfully")

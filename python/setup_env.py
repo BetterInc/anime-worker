@@ -159,20 +159,40 @@ def main():
     print("\n⬆️  Upgrading pip...")
     subprocess.check_call([python, "-m", "pip", "install", "--upgrade", "pip", "-q"])
 
-    print("\n🔥 Installing PyTorch (CUDA 12.4)...")
-    subprocess.check_call(
-        [
-            python,
-            "-m",
-            "pip",
-            "install",
-            "torch",
-            "torchvision",
-            "torchaudio",
-            "--index-url",
-            "https://download.pytorch.org/whl/cu124",
-        ]
-    )
+    print("\n🔥 Installing PyTorch (CUDA 12.8 - supports RTX 20/30/40/50 series)...")
+    # Use nightly with CUDA 12.8 for RTX 50-series (Blackwell/sm_120) support
+    # This is backward compatible with older GPUs (sm_50+)
+    try:
+        subprocess.check_call(
+            [
+                python,
+                "-m",
+                "pip",
+                "install",
+                "--pre",
+                "torch",
+                "torchvision",
+                "torchaudio",
+                "--index-url",
+                "https://download.pytorch.org/whl/nightly/cu128",
+            ]
+        )
+    except subprocess.CalledProcessError:
+        print("\n⚠️  Nightly cu128 failed, falling back to stable cu124...")
+        print("   Note: RTX 50-series GPUs may not be fully supported")
+        subprocess.check_call(
+            [
+                python,
+                "-m",
+                "pip",
+                "install",
+                "torch",
+                "torchvision",
+                "torchaudio",
+                "--index-url",
+                "https://download.pytorch.org/whl/cu124",
+            ]
+        )
 
     if REQUIREMENTS.exists():
         print(f"\n📚 Installing dependencies from {REQUIREMENTS.name}...")

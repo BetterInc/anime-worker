@@ -267,11 +267,29 @@ async fn main() -> anyhow::Result<()> {
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|| std::path::PathBuf::from("config.toml"));
 
-            // Locate the python/ directory (same logic as SetupPython).
-            let scripts_dir = std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|p| p.join("python")))
-                .unwrap_or_else(|| std::path::PathBuf::from("python"));
+            // Locate the python/ directory: try exe-relative first, then cwd-relative.
+            let scripts_dir = {
+                // First try next to the executable (deployed scenario)
+                let exe_relative = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|p| p.join("python")));
+
+                if let Some(ref path) = exe_relative {
+                    if path.join("setup_env.py").exists() {
+                        path.clone()
+                    } else {
+                        // Fallback: check current working directory (development scenario)
+                        let cwd_relative = std::path::PathBuf::from("python");
+                        if cwd_relative.join("setup_env.py").exists() {
+                            cwd_relative
+                        } else {
+                            exe_relative.unwrap_or_else(|| std::path::PathBuf::from("python"))
+                        }
+                    }
+                } else {
+                    std::path::PathBuf::from("python")
+                }
+            };
 
             setup::run(&config_path, &scripts_dir)?;
         }
@@ -293,10 +311,25 @@ async fn main() -> anyhow::Result<()> {
                 .and_then(|p| config::WorkerConfig::load(&p).ok())
                 .map(|c| c.python_scripts_dir)
                 .unwrap_or_else(|| {
-                    std::env::current_exe()
+                    // First try next to the executable (deployed scenario)
+                    let exe_relative = std::env::current_exe()
                         .ok()
-                        .and_then(|p| p.parent().map(|p| p.join("python")))
-                        .unwrap_or_else(|| std::path::PathBuf::from("python"))
+                        .and_then(|p| p.parent().map(|p| p.join("python")));
+
+                    if let Some(ref path) = exe_relative {
+                        if path.join("setup_env.py").exists() {
+                            return path.clone();
+                        }
+                    }
+
+                    // Fallback: check current working directory (development scenario)
+                    let cwd_relative = std::path::PathBuf::from("python");
+                    if cwd_relative.join("setup_env.py").exists() {
+                        return cwd_relative;
+                    }
+
+                    // Default to exe-relative path for error messaging
+                    exe_relative.unwrap_or_else(|| std::path::PathBuf::from("python"))
                 });
 
             let setup_script = scripts_dir.join("setup_env.py");

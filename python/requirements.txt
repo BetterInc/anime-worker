@@ -10,7 +10,7 @@ protobuf
 Pillow
 numpy
 opencv-python-headless
-xformers
+xformers>=0.0.29
 ftfy
 imageio-ffmpeg
 
