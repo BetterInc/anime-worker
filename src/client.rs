@@ -390,6 +390,116 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                         }
                     }
 
+                    ServerMessage::DownloadModel {
+                        model_id,
+                        model_name,
+                        hf_repo,
+                    } => {
+                        info!(
+                            "Received download request for model: {} ({})",
+                            model_name, model_id
+                        );
+
+                        // Spawn download task in background
+                        let config_clone = config.clone();
+                        let write_clone = write.clone();
+
+                        tokio::spawn(async move {
+                            // TODO: Get model config from server or config file
+                            // For now, assume local_dir is same as model_id
+                            let local_dir = model_id.clone();
+                            let model_path = config_clone.models_dir.join(&local_dir);
+
+                            // Check if already downloaded
+                            if model_path.exists()
+                                && models::is_model_cached(&config_clone.models_dir, &local_dir)
+                            {
+                                info!("Model {} already cached", model_id);
+
+                                // Send updated heartbeat
+                                let cached = models::list_cached_models(&config_clone.models_dir);
+                                let hw_stats = build_hardware_stats(&config_clone);
+                                let hb = WorkerMessage::Heartbeat {
+                                    worker_id: config_clone.worker_id.clone(),
+                                    hardware_stats: hw_stats,
+                                    models_cached: cached,
+                                };
+                                if let Ok(json) = serde_json::to_string(&hb) {
+                                    let _ =
+                                        write_clone.lock().await.send(Message::Text(json)).await;
+                                }
+                                return;
+                            }
+
+                            info!("Downloading model {} from {}", model_name, hf_repo);
+
+                            // Download model with progress reporting
+                            // Use a dummy task_id for manual downloads
+                            let task_id =
+                                format!("manual-download-{}", &model_id[..8.min(model_id.len())]);
+                            let model_id_clone = model_id.clone();
+                            let write_progress = write_clone.clone();
+
+                            let result = models::download_model(
+                                &hf_repo,
+                                &config_clone.models_dir,
+                                &local_dir,
+                                20.0, // TODO: Get actual size from server
+                                move |downloaded_gb: f64, total_gb: f64| {
+                                    info!(
+                                        "Download progress: {:.1}/{:.1} GB",
+                                        downloaded_gb, total_gb
+                                    );
+
+                                    // Send progress update via WebSocket
+                                    let msg = WorkerMessage::ModelProgress {
+                                        task_id: task_id.clone(),
+                                        model_id: model_id_clone.clone(),
+                                        downloaded_gb,
+                                        total_gb,
+                                    };
+                                    let write_locked = write_progress.clone();
+                                    tokio::spawn(async move {
+                                        if let Ok(json) = serde_json::to_string(&msg) {
+                                            let _ = write_locked
+                                                .lock()
+                                                .await
+                                                .send(Message::Text(json))
+                                                .await;
+                                        }
+                                    });
+                                },
+                            )
+                            .await;
+
+                            match result {
+                                Ok(_) => {
+                                    info!("✓ Model {} downloaded successfully", model_id);
+
+                                    // Send updated heartbeat with new cached models list
+                                    let cached =
+                                        models::list_cached_models(&config_clone.models_dir);
+                                    let hw_stats = build_hardware_stats(&config_clone);
+                                    let hb = WorkerMessage::Heartbeat {
+                                        worker_id: config_clone.worker_id.clone(),
+                                        hardware_stats: hw_stats,
+                                        models_cached: cached,
+                                    };
+                                    if let Ok(json) = serde_json::to_string(&hb) {
+                                        let _ = write_clone
+                                            .lock()
+                                            .await
+                                            .send(Message::Text(json))
+                                            .await;
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to download model {}: {}", model_id, e);
+                                }
+                            }
+                        });
+                    }
+
                     ServerMessage::Error { message } => {
                         error!("Server error: {}", message);
                     }

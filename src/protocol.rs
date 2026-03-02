@@ -134,6 +134,11 @@ pub enum ServerMessage {
         model_id: String,
         local_dir: String,
     },
+    DownloadModel {
+        model_id: String,
+        model_name: String,
+        hf_repo: String,
+    },
     TasksAvailable {},
     HeartbeatAck {},
     Error {
