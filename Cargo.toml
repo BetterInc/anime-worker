@@ -46,6 +46,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 num_cpus = "1.17.0"
 
+# Time handling for timestamps
+chrono = { version = "0.4", features = ["serde"] }
+
 # Interactive CLI prompts
 dialoguer = { version = "0.11", features = ["password"] }
 console = "0.15"

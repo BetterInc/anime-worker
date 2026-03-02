@@ -75,6 +75,36 @@ pub enum WorkerMessage {
         result_filename: String,
         metadata: serde_json::Value,
     },
+    Log {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        job_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        task_id: Option<String>,
+        level: String,
+        message: String,
+        source: String,
+        timestamp: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        metadata: Option<serde_json::Value>,
+    },
+    LogBatch {
+        logs: Vec<LogEntry>,
+    },
+}
+
+/// A single log entry for batching
+#[derive(Debug, Clone, Serialize)]
+pub struct LogEntry {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub job_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    pub level: String,
+    pub message: String,
+    pub source: String,
+    pub timestamp: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }
 
 // ---------------------------------------------------------------------------

@@ -147,6 +147,66 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
         write.lock().await.send(Message::Text(msg)).await?;
     }
 
+    // Log batching channel
+    let (log_tx, mut log_rx) = tokio::sync::mpsc::channel::<crate::protocol::LogEntry>(1000);
+
+    // Current job ID for metrics
+    let current_job_id = Arc::new(Mutex::new(None::<String>));
+
+    // Start metrics collector
+    crate::metrics::spawn_metrics_collector(log_tx.clone(), current_job_id.clone());
+
+    // Log batcher task - batches INFO/DEBUG, sends WARN/ERROR immediately
+    let log_write = write.clone();
+    let log_batcher_handle = tokio::spawn(async move {
+        let mut batch = Vec::new();
+        let mut interval = time::interval(Duration::from_secs(2));
+
+        loop {
+            tokio::select! {
+                Some(log) = log_rx.recv() => {
+                    // Send WARN/ERROR immediately
+                    if log.level == "WARN" || log.level == "ERROR" {
+                        let msg = WorkerMessage::Log {
+                            job_id: log.job_id,
+                            task_id: log.task_id,
+                            level: log.level,
+                            message: log.message,
+                            source: log.source,
+                            timestamp: log.timestamp,
+                            metadata: log.metadata,
+                        };
+                        if let Ok(json) = serde_json::to_string(&msg) {
+                            let _ = log_write.lock().await.send(Message::Text(json)).await;
+                        }
+                    } else {
+                        // Batch INFO/DEBUG
+                        batch.push(log);
+                        if batch.len() >= 20 {
+                            let msg = WorkerMessage::LogBatch {
+                                logs: batch.drain(..).collect(),
+                            };
+                            if let Ok(json) = serde_json::to_string(&msg) {
+                                let _ = log_write.lock().await.send(Message::Text(json)).await;
+                            }
+                        }
+                    }
+                }
+                _ = interval.tick() => {
+                    // Flush batch every 2 seconds
+                    if !batch.is_empty() {
+                        let msg = WorkerMessage::LogBatch {
+                            logs: batch.drain(..).collect(),
+                        };
+                        if let Ok(json) = serde_json::to_string(&msg) {
+                            let _ = log_write.lock().await.send(Message::Text(json)).await;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     // Heartbeat task
     let hb_write = write.clone();
     let hb_config = config.clone();
@@ -224,8 +284,13 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                         let config = config.clone();
                         let write = write.clone();
                         let active = active_inference.clone();
+                        let job_id_arc = current_job_id.clone();
+                        let log_tx_clone = log_tx.clone();
 
                         tokio::spawn(async move {
+                            // Set current job ID for metrics
+                            *job_id_arc.lock().await = Some(job_id.clone());
+
                             let result = process_job_batch(
                                 &config,
                                 &write,
@@ -237,8 +302,12 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                                 &model_id,
                                 model_config,
                                 pipeline_config,
+                                log_tx_clone,
                             )
                             .await;
+
+                            // Clear job ID when done
+                            *job_id_arc.lock().await = None;
 
                             if let Err(e) = result {
                                 error!("Job {} failed: {}", &job_id[..8], e);
@@ -279,6 +348,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     }
 
     heartbeat_handle.abort();
+    log_batcher_handle.abort();
     Ok(())
 }
 
@@ -295,6 +365,7 @@ async fn process_job_batch<S>(
     model_id: &str,
     model_config: Box<crate::protocol::ModelConfig>,
     pipeline_config: Box<serde_json::Value>,
+    log_tx: tokio::sync::mpsc::Sender<crate::protocol::LogEntry>,
 ) -> anyhow::Result<()>
 where
     S: SinkExt<Message> + Unpin + Send + 'static,

@@ -6,6 +6,7 @@
 mod client;
 mod config;
 mod hardware;
+mod metrics;
 mod models;
 mod protocol;
 mod runner;

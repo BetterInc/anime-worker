@@ -33,11 +33,11 @@ COPY --from=builder /build/target/release/anime-worker /usr/local/bin/anime-work
 # Copy Python scripts
 COPY python/ ./python/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r python/requirements.txt
+# Install Python dependencies with increased timeout for large CUDA packages
+RUN pip install --timeout=300 --retries=3 --no-cache-dir -r python/requirements.txt
 
 # Install HuggingFace CLI
-RUN pip install --no-cache-dir "huggingface_hub[cli]"
+RUN pip install --timeout=300 --no-cache-dir "huggingface_hub[cli]"
 
 # Create directories
 RUN mkdir -p /app/models /root/.anime-worker
