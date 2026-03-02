@@ -17,10 +17,7 @@ pub struct CleanupConfig {
 
 impl CleanupConfig {
     pub fn from_models_dir(models_dir: &Path, retention_hours: u64) -> Self {
-        let base_dir = models_dir
-            .parent()
-            .unwrap_or(models_dir)
-            .to_path_buf();
+        let base_dir = models_dir.parent().unwrap_or(models_dir).to_path_buf();
 
         Self {
             base_dir,
@@ -179,7 +176,10 @@ mod tests {
         run_cleanup(&config).await.unwrap();
 
         // Recent items should still exist
-        assert!(recent_dir.exists(), "Recent directory should not be deleted");
+        assert!(
+            recent_dir.exists(),
+            "Recent directory should not be deleted"
+        );
         assert!(recent_file.exists(), "Recent file should not be deleted");
 
         // Cleanup test directory

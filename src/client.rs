@@ -253,7 +253,9 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     // Cleanup task - runs periodically to remove old files
     let cleanup_config_ref = config.clone();
     let cleanup_handle = tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(cleanup_config_ref.cleanup_interval_secs));
+        let mut interval = time::interval(Duration::from_secs(
+            cleanup_config_ref.cleanup_interval_secs,
+        ));
         loop {
             interval.tick().await;
             let cleanup_cfg = crate::cleanup::CleanupConfig::from_models_dir(
