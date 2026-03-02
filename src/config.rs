@@ -61,6 +61,14 @@ pub struct WorkerConfig {
     /// Worker constraints for model filtering
     #[serde(default)]
     pub constraints: WorkerConstraints,
+
+    /// Enable log streaming to server (default: false)
+    #[serde(default)]
+    pub enable_log_streaming: bool,
+
+    /// Enable GPU/RAM metrics collection (default: false)
+    #[serde(default)]
+    pub enable_metrics_collection: bool,
 }
 
 fn default_models_dir() -> PathBuf {

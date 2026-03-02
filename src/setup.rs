@@ -167,6 +167,8 @@ pub fn gather_config(theme: &ColorfulTheme) -> anyhow::Result<WorkerConfig> {
         python_scripts_dir,
         heartbeat_interval_secs: 30,
         constraints,
+        enable_log_streaming: false,
+        enable_metrics_collection: false,
     })
 }
 

@@ -43,7 +43,13 @@ Uploads video files (MP4) and images (PNG) to S3 storage.
 
 ### 4. Logs (Optional - Off by Default)
 
-Worker logs and GPU metrics. Enable in `~/.anime-worker/config.toml` if you want debugging help.
+Worker logs and GPU metrics. **Not sent unless you enable it.**
+
+**To enable:** Add to `~/.anime-worker/config.toml`:
+```toml
+enable_log_streaming = true
+enable_metrics_collection = true
+```
 
 **Retention:** 3 days, then deleted (or 30 days in archive).
 
