@@ -1,6 +1,6 @@
 # Privacy & Data Usage
 
-**Important:** This worker connects to an Anime Studio API server. The API server operator can see the data described below.
+This worker connects to the Anime Studio API to process video generation jobs.
 
 ## What We Don't Do
 
@@ -8,37 +8,24 @@ No IP logging, no location tracking, no analytics, no data selling, no content a
 
 ---
 
-## What Your Worker Sends to the API Server
+## What Your Worker Sends
 
-### 1. Hardware Information
-
-**Sent on connection and every 30 seconds:**
+### 1. Hardware Stats (every 30 seconds)
 
 ```json
 {
-  "type": "heartbeat",
-  "hardware_stats": {
-    "cpu": {"cores": 10, "usage_percent": 17},
-    "ram": {"total_gb": 125.0, "used_gb": 66.2, "free_gb": 58.8},
-    "disk": {"total_gb": 1769.6, "used_gb": 826.9, "free_gb": 942.7},
-    "gpus": [
-      {"name": "NVIDIA GeForce RTX 3090", "vram_total_mb": 24576, "vram_free_mb": 12507},
-      {"name": "NVIDIA GeForce RTX 3090", "vram_total_mb": 24576, "vram_free_mb": 12537}
-    ]
-  }
+  "cpu": {"cores": 10, "usage_percent": 17},
+  "ram": {"total_gb": 125.0, "used_gb": 66.2, "free_gb": 58.8},
+  "disk": {"total_gb": 1769.6, "used_gb": 826.9, "free_gb": 942.7},
+  "gpus": [
+    {"name": "NVIDIA GeForce RTX 3090", "vram_total_mb": 24576, "vram_free_mb": 12507}
+  ]
 }
 ```
 
-**What the server receives:**
-CPU core count and usage, total RAM and disk space (free/used), GPU model names and VRAM amounts.
-
-**Why:** Server needs this to assign jobs that fit your hardware.
-
----
+**Why:** Assign jobs that fit your hardware.
 
 ### 2. Job Progress
-
-**While generating videos:**
 
 ```json
 {
@@ -48,116 +35,59 @@ CPU core count and usage, total RAM and disk space (free/used), GPU model names 
 }
 ```
 
-**What the server receives:** Current task progress percentage and status messages.
-
----
+**Why:** Show progress in dashboard.
 
 ### 3. Generated Videos
 
-**What gets uploaded:**
-Video files (MP4) and lastframe images (PNG) to the API operator's S3 bucket.
+Uploads video files (MP4) and images (PNG) to S3 storage.
 
-**Important:** The API operator can access all videos your worker generates.
+### 4. Logs (Optional - Off by Default)
 
----
+Worker logs and GPU metrics. Enable in `~/.anime-worker/config.toml` if you want debugging help.
 
-### 4. Logs (Optional - Disabled by Default)
-
-**Only if you enable log streaming:**
-
-```json
-{
-  "type": "log",
-  "level": "INFO",
-  "message": "Diffusion complete in 1551.8s"
-}
-```
-
-**What the server receives:** Worker logs, Python inference logs, and GPU/RAM utilization metrics.
-
-**To enable:** Edit `~/.anime-worker/config.toml`
-**Retention:** 3 days in database, 30 days in S3, then deleted.
+**Retention:** 3 days, then deleted (or 30 days in archive).
 
 ---
 
-## What You Receive From the Server
+## What the Service Can See
 
-### Job Assignments
+Hardware specs (CPU/RAM/Disk/GPU), cached models, job progress, and generated videos. If you enable logs: worker logs and GPU metrics.
 
-**The server sends you:**
+---
 
-```json
-{
-  "type": "job_batch_assign",
-  "tasks": [{
-    "scene": {
-      "prompt": "A beautiful digital girl with flowing hair",
-      "duration": 3
-    }
-  }],
-  "project": {
-    "story_context": "A modern love story...",
-    "visual_style": {...}
-  }
-}
-```
+## Private vs Public Workers
 
-**What you receive:** Scene prompts, project context/style, and model configuration.
+**Private Worker (Default):**
+- Only processes YOUR jobs (your account)
+- Other users cannot see your worker
+- Your videos stay private
 
-**Private mode:** Only YOUR jobs. **Public mode:** Jobs from any user.
+**Public Worker:**
+- Processes jobs from ANY user
+- You generate videos for other people
+- Contributes GPU power to help the community
+
+---
+
+## What You Receive
+
+Scene prompts, project settings, and model configuration for video generation.
+
+**Private mode:** Only your jobs.
+**Public mode:** Jobs from any user.
 
 ---
 
 ## Security
 
-**Connection:** Encrypted (TLS/WSS), authenticated (API key), outbound only (no open ports).
+Encrypted connection (WSS/HTTPS), API key authentication, outbound only (no open ports on your machine).
 
-**Your Control:** Disconnect anytime, delete worker registration, choose private/public mode, set resource limits.
-
----
-
-## What the API Operator Can See
-
-Hardware specs (CPU/RAM/Disk/GPU), cached models, job progress, and all generated videos. If you enable logs: worker logs and GPU metrics.
-
-### Public vs Private Workers
-
-**Private Worker:**
-- ✅ Only processes YOUR jobs (your account)
-- ✅ Other users cannot see your worker
-- ✅ Your videos stay private
-
-**Public Worker:**
-- ⚠️ Processes jobs from ANY user
-- ⚠️ You generate videos for other people
-- ⚠️ Server operator can see all generated content
-
-**Default:** Private
-
----
-
-## Trust Model
-
-**If you trust the API operator:** Run the worker. They'll see your hardware specs and videos you generate.
-
-**If you don't trust them:** Don't run the worker, or run your own API server (it's open source).
+**Your control:** Disconnect anytime, delete worker, choose private/public, set limits.
 
 ---
 
 ## Open Source
 
-**Audit the code yourself:**
-- `src/protocol.rs` - All message formats defined here
-- `src/hardware.rs` - How hardware stats are collected
-- `src/client.rs` - WebSocket communication
-- `src/upload.rs` - File uploads
+Audit the code on GitHub: `src/protocol.rs`, `src/hardware.rs`, `src/client.rs`
 
-**No hidden tracking. What you see is what you get.**
-
----
-
-## Questions?
-
-Open an issue on GitHub.
-
-**Remember:** You're connecting YOUR GPU to SOMEONE ELSE'S server. Only run workers for API servers you trust.
+No hidden tracking.
