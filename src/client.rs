@@ -184,7 +184,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                         batch.push(log);
                         if batch.len() >= 20 {
                             let msg = WorkerMessage::LogBatch {
-                                logs: batch.drain(..).collect(),
+                                logs: std::mem::take(&mut batch),
                             };
                             if let Ok(json) = serde_json::to_string(&msg) {
                                 let _ = log_write.lock().await.send(Message::Text(json)).await;
@@ -196,7 +196,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                     // Flush batch every 2 seconds
                     if !batch.is_empty() {
                         let msg = WorkerMessage::LogBatch {
-                            logs: batch.drain(..).collect(),
+                            logs: std::mem::take(&mut batch),
                         };
                         if let Ok(json) = serde_json::to_string(&msg) {
                             let _ = log_write.lock().await.send(Message::Text(json)).await;
@@ -365,7 +365,7 @@ async fn process_job_batch<S>(
     model_id: &str,
     model_config: Box<crate::protocol::ModelConfig>,
     pipeline_config: Box<serde_json::Value>,
-    log_tx: tokio::sync::mpsc::Sender<crate::protocol::LogEntry>,
+    _log_tx: tokio::sync::mpsc::Sender<crate::protocol::LogEntry>,
 ) -> anyhow::Result<()>
 where
     S: SinkExt<Message> + Unpin + Send + 'static,

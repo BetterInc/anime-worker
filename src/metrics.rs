@@ -94,7 +94,7 @@ pub fn spawn_metrics_collector(
 async fn collect_gpu_metrics() -> anyhow::Result<Vec<GpuMetrics>> {
     let output = tokio::task::spawn_blocking(|| {
         Command::new("nvidia-smi")
-            .args(&["dmon", "-c", "1", "-s", "u"])
+            .args(["dmon", "-c", "1", "-s", "u"])
             .output()
     })
     .await??;

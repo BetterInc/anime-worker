@@ -23,14 +23,22 @@ pub async fn upload_file(
         .unwrap_or("output.mp4")
         .to_string();
 
-    info!("Uploading {} to {} (max {} retries)", file_path.display(), url, MAX_RETRIES);
+    info!(
+        "Uploading {} to {} (max {} retries)",
+        file_path.display(),
+        url,
+        MAX_RETRIES
+    );
 
     let mut last_error = None;
 
     for attempt in 1..=MAX_RETRIES {
         if attempt > 1 {
             let backoff_ms = INITIAL_BACKOFF_MS * 2_u64.pow(attempt - 2);
-            info!("Retry attempt {}/{} after {}ms", attempt, MAX_RETRIES, backoff_ms);
+            info!(
+                "Retry attempt {}/{} after {}ms",
+                attempt, MAX_RETRIES, backoff_ms
+            );
             tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
         }
 
@@ -46,7 +54,8 @@ pub async fn upload_file(
         }
     }
 
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Upload failed after {} retries", MAX_RETRIES)))
+    Err(last_error
+        .unwrap_or_else(|| anyhow::anyhow!("Upload failed after {} retries", MAX_RETRIES)))
 }
 
 /// Single upload attempt with timeout.
@@ -96,14 +105,22 @@ pub async fn download_file(
     const TIMEOUT_SECS: u64 = 60;
 
     let url = format!("{}{}", server_url.trim_end_matches('/'), path);
-    info!("Downloading {} to {} (max {} retries)", url, dest.display(), MAX_RETRIES);
+    info!(
+        "Downloading {} to {} (max {} retries)",
+        url,
+        dest.display(),
+        MAX_RETRIES
+    );
 
     let mut last_error = None;
 
     for attempt in 1..=MAX_RETRIES {
         if attempt > 1 {
             let backoff_ms = INITIAL_BACKOFF_MS * 2_u64.pow(attempt - 2);
-            info!("Retry attempt {}/{} after {}ms", attempt, MAX_RETRIES, backoff_ms);
+            info!(
+                "Retry attempt {}/{} after {}ms",
+                attempt, MAX_RETRIES, backoff_ms
+            );
             tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
         }
 
@@ -119,7 +136,8 @@ pub async fn download_file(
         }
     }
 
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("Download failed after {} retries", MAX_RETRIES)))
+    Err(last_error
+        .unwrap_or_else(|| anyhow::anyhow!("Download failed after {} retries", MAX_RETRIES)))
 }
 
 /// Single download attempt with timeout.
