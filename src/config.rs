@@ -319,6 +319,8 @@ mod tests {
             python_scripts_dir: temp_dir.join("python"),
             heartbeat_interval_secs: 30,
             constraints: WorkerConstraints::default(),
+            enable_log_streaming: false,
+            enable_metrics_collection: false,
         };
 
         // Save config

@@ -574,6 +574,8 @@ mod tests {
                 disk_limit_gb: parse_optional_f64("0"),
                 ..WorkerConstraints::default()
             },
+            enable_log_streaming: false,
+            enable_metrics_collection: false,
         };
 
         assert!(cfg.constraints.cpu_limit.is_none());
@@ -619,6 +621,8 @@ mod tests {
                 disk_limit_gb: Some(500.0),
                 ..WorkerConstraints::default()
             },
+            enable_log_streaming: false,
+            enable_metrics_collection: false,
         };
 
         cfg.save(&path).expect("save should succeed");

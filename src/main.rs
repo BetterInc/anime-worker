@@ -203,6 +203,8 @@ async fn main() -> anyhow::Result<()> {
                     .unwrap_or_else(|| std::path::PathBuf::from("python")),
                 heartbeat_interval_secs: 30,
                 constraints: config::WorkerConstraints::default(),
+                enable_log_streaming: false,
+                enable_metrics_collection: false,
             };
 
             cfg.save(&config_path)?;

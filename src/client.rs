@@ -153,12 +153,24 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     // Current job ID for metrics
     let current_job_id = Arc::new(Mutex::new(None::<String>));
 
-    // Start metrics collector
-    crate::metrics::spawn_metrics_collector(log_tx.clone(), current_job_id.clone());
+    // Start metrics collector (only if enabled)
+    if config.enable_metrics_collection {
+        info!("Metrics collection enabled");
+        crate::metrics::spawn_metrics_collector(log_tx.clone(), current_job_id.clone());
+    }
 
     // Log batcher task - batches INFO/DEBUG, sends WARN/ERROR immediately
     let log_write = write.clone();
+    let enable_logging = config.enable_log_streaming;
+    if enable_logging {
+        info!("Log streaming enabled");
+    }
     let log_batcher_handle = tokio::spawn(async move {
+        if !enable_logging {
+            // Drain channel but don't send if disabled
+            while log_rx.recv().await.is_some() {}
+            return;
+        }
         let mut batch = Vec::new();
         let mut interval = time::interval(Duration::from_secs(2));
 
