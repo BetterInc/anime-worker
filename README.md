@@ -2,6 +2,8 @@
 
 Distributed GPU worker for Anime Studio video generation. Connects outbound to the central server via WebSocket, receives job assignments (batches of scenes), runs GPU inference via Python subprocess, and uploads results. Cross-platform: Linux, Windows, and macOS.
 
+📖 **[Privacy & Data Usage](PRIVACY.md)** - See exactly what data is sent/received and why it's needed
+
 ## Quick Start
 
 ```bash
