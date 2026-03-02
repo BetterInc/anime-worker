@@ -3,6 +3,7 @@
 //! Connects outbound to the central server via WebSocket, receives job
 //! assignments, runs GPU inference via Python subprocess, and uploads results.
 
+mod cleanup;
 mod client;
 mod config;
 mod hardware;
@@ -205,6 +206,8 @@ async fn main() -> anyhow::Result<()> {
                 constraints: config::WorkerConstraints::default(),
                 enable_log_streaming: false,
                 enable_metrics_collection: false,
+                cleanup_interval_secs: 3600,
+                retention_hours: 24,
             };
 
             cfg.save(&config_path)?;

@@ -71,7 +71,7 @@ def setup_pipeline(config, model_config=None):
     import os
 
     # Configure PyTorch memory allocator to reduce fragmentation
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
     # Aggressive cleanup before loading model
     gc.collect()
@@ -83,7 +83,9 @@ def setup_pipeline(config, model_config=None):
             free, total = torch.cuda.mem_get_info(i)
             free_gb = free / (1024**3)
             total_gb = total / (1024**3)
-            logger.info(f"GPU {i} VRAM before load: {free_gb:.1f}GB free / {total_gb:.1f}GB total")
+            logger.info(
+                f"GPU {i} VRAM before load: {free_gb:.1f}GB free / {total_gb:.1f}GB total"
+            )
         logger.info("Cleared CUDA cache before model loading")
 
     logger.info(f"PyTorch version: {torch.__version__}")
@@ -272,6 +274,7 @@ def setup_pipeline(config, model_config=None):
         else:
             try:
                 from diffusers.models.attention_processor import AttnProcessor2_0
+
                 if hasattr(pipe, "unet") and pipe.unet is not None:
                     pipe.unet.set_attn_processor(AttnProcessor2_0())
                     logger.info("  PyTorch SDPA enabled (fallback)")
@@ -279,7 +282,9 @@ def setup_pipeline(config, model_config=None):
                     pipe.transformer.set_attn_processor(AttnProcessor2_0())
                     logger.info("  PyTorch SDPA enabled on transformer (fallback)")
             except Exception as e:
-                logger.warning(f"  PyTorch SDPA fallback failed ({e}), using default attention")
+                logger.warning(
+                    f"  PyTorch SDPA fallback failed ({e}), using default attention"
+                )
 
     # Other optimizations
     optimizations = [
@@ -291,7 +296,7 @@ def setup_pipeline(config, model_config=None):
             try:
                 getattr(pipe, method_name)()
                 logger.info(f"  {opt_key} enabled")
-            except (AttributeError, ImportError) as e:
+            except (AttributeError, ImportError):
                 logger.warning(f"  {opt_key} not supported, skipping")
 
     logger.info(f"{model_path.name} loaded successfully")

@@ -179,14 +179,14 @@ class VRAMManager:
 
     # Components that can be offloaded, in order of size (largest first)
     OFFLOADABLE_COMPONENTS = [
-        'transformer',  # Wan, Flux
-        'unet',         # SD, SDXL
-        'text_encoder_2',
-        'text_encoder',
-        'text_encoder_3',
+        "transformer",  # Wan, Flux
+        "unet",  # SD, SDXL
+        "text_encoder_2",
+        "text_encoder",
+        "text_encoder_3",
     ]
 
-    def __init__(self, pipeline, device='cuda:0', min_free_vram_gb=6.0):
+    def __init__(self, pipeline, device="cuda:0", min_free_vram_gb=6.0):
         self.pipeline = pipeline
         self.device = device
         self.min_free_vram_gb = min_free_vram_gb
@@ -195,18 +195,20 @@ class VRAMManager:
     def get_free_vram_gb(self):
         """Get current free VRAM in GB."""
         import torch
+
         if not torch.cuda.is_available():
             return 0.0
-        device_idx = int(self.device.split(':')[-1]) if ':' in self.device else 0
+        device_idx = int(self.device.split(":")[-1]) if ":" in self.device else 0
         free, _ = torch.cuda.mem_get_info(device_idx)
         return free / (1024**3)
 
     def get_total_vram_gb(self):
         """Get total VRAM in GB."""
         import torch
+
         if not torch.cuda.is_available():
             return 0.0
-        device_idx = int(self.device.split(':')[-1]) if ':' in self.device else 0
+        device_idx = int(self.device.split(":")[-1]) if ":" in self.device else 0
         _, total = torch.cuda.mem_get_info(device_idx)
         return total / (1024**3)
 
@@ -231,7 +233,9 @@ class VRAMManager:
             logger.info(f"  VRAM OK ({free_gb:.1f}GB free), no offload needed")
             return False
 
-        logger.info(f"  Low VRAM ({free_gb:.1f}GB free < {self.min_free_vram_gb}GB required)")
+        logger.info(
+            f"  Low VRAM ({free_gb:.1f}GB free < {self.min_free_vram_gb}GB required)"
+        )
         logger.info("  Offloading model components to CPU for VAE decode...")
 
         if progress_callback:
@@ -246,7 +250,7 @@ class VRAMManager:
             # Check if it's actually on GPU
             try:
                 param = next(component.parameters())
-                if param.device.type != 'cuda':
+                if param.device.type != "cuda":
                     continue
                 original_device = str(param.device)
             except StopIteration:
@@ -254,7 +258,7 @@ class VRAMManager:
 
             # Offload to CPU
             logger.info(f"    Moving {component_name} to CPU...")
-            component.to('cpu')
+            component.to("cpu")
             self.offloaded_components[component_name] = original_device
             offloaded_count += 1
 
@@ -270,7 +274,9 @@ class VRAMManager:
                 break
 
         final_free = self.get_free_vram_gb()
-        logger.info(f"  Offloaded {offloaded_count} components, VRAM now {final_free:.1f}GB free")
+        logger.info(
+            f"  Offloaded {offloaded_count} components, VRAM now {final_free:.1f}GB free"
+        )
 
         if progress_callback:
             progress_callback(100, "Model offloaded")
@@ -290,14 +296,18 @@ class VRAMManager:
             progress_callback(0, "Reloading model...")
 
         total = len(self.offloaded_components)
-        for idx, (component_name, original_device) in enumerate(self.offloaded_components.items()):
+        for idx, (component_name, original_device) in enumerate(
+            self.offloaded_components.items()
+        ):
             component = getattr(self.pipeline, component_name, None)
             if component is not None:
                 logger.info(f"    Moving {component_name} back to {original_device}...")
                 component.to(original_device)
 
                 if progress_callback:
-                    progress_callback(int((idx + 1) / total * 100), f"Reloaded {component_name}")
+                    progress_callback(
+                        int((idx + 1) / total * 100), f"Reloaded {component_name}"
+                    )
 
         self.offloaded_components.clear()
         torch.cuda.empty_cache()
@@ -333,5 +343,7 @@ def get_optimal_vae_batch_size(free_vram_gb, frame_height=480, frame_width=832):
     # Cap at reasonable values
     batch_size = min(batch_size, 32)
 
-    logger.info(f"  VAE batch size: {batch_size} (based on {free_vram_gb:.1f}GB free VRAM)")
+    logger.info(
+        f"  VAE batch size: {batch_size} (based on {free_vram_gb:.1f}GB free VRAM)"
+    )
     return batch_size

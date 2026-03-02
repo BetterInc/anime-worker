@@ -185,7 +185,13 @@ def handle_generation_task(job: dict) -> tuple[list[str], dict]:
             base_pct = 15 + (scene_idx / total_scenes) * 80
             scene_contribution = (pct / 100) * (80 / total_scenes)
             overall_pct = base_pct + scene_contribution
-            emit({"type": "progress", "pct": overall_pct, "message": f"Scene {scene_idx + 1}: {msg}"})
+            emit(
+                {
+                    "type": "progress",
+                    "pct": overall_pct,
+                    "message": f"Scene {scene_idx + 1}: {msg}",
+                }
+            )
 
         success, new_lastframe = generate_preview_frame(
             prompt=scene.get("prompt", ""),

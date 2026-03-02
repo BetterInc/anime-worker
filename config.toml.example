@@ -1,75 +1,36 @@
 # Anime Worker Configuration Example
-# Copy to ~/.anime-worker/config.toml and customize
+# Copy to config.toml and fill in your details
 
-server_url = "https://animestudiocontaineryaw5gajb-anime-api.functions.fnc.nl-ams.scw.cloud"
-worker_id = "your-worker-id-from-registration"
-api_key = "aw_your-api-key-here"
+server_url = "https://your-server.example.com"
+worker_id = "worker-uuid-from-registration"
+api_key = "aw_your_api_key_here"
 worker_name = "My GPU Worker"
 
-# Optional: Custom paths
-# models_dir = "/path/to/models"  # Default: ~/.anime-worker/models
-# python_path = "python3"  # Auto-detected if not set
-# python_scripts_dir = "./python"  # Default: ./python relative to binary
+# Optional: Override default directories
+# models_dir = "/path/to/models"        # Default: ~/.anime-worker/models
+# python_path = "python3"                # Auto-detected if not set
+# python_scripts_dir = "./python"        # Default: auto-detected near binary
 
-# Optional: Heartbeat interval
-# heartbeat_interval_secs = 30
+# Optional: Intervals and timing
+# heartbeat_interval_secs = 30           # Default: 30 seconds
+# cleanup_interval_secs = 3600           # Default: 3600 (1 hour)
+# retention_hours = 24                   # Default: 24 hours
 
-# Worker Constraints (Optional)
-# Configure which models this worker can/will run
+# Optional: Enable streaming features
+# enable_log_streaming = true            # Stream logs to server (default: false)
+# enable_metrics_collection = true       # Collect GPU/RAM metrics (default: false)
+
+# Worker Constraints (all optional)
 [constraints]
+# Resource limits - restrict what the worker reports to the server
+# cpu_limit = 8              # Allocate only 8 cores (omit = use 90% of available)
+# ram_limit_gb = 32.0        # Report only 32GB RAM (omit = use actual)
+# disk_limit_gb = 500.0      # Report 500GB disk space (omit = use 90% of available)
 
-# Maximum model size this worker will download (in GB)
-# Example: Set to 15 for small SSD, 100 for large storage
-# Default: No limit (download any size)
-max_model_size_gb = 30
+# Model filtering - control which models this worker will handle
+# max_model_size_gb = 30     # Don't download models larger than 30GB
+# max_total_cache_gb = 100   # Keep cache under 100GB total
 
-# Maximum total cache size (in GB)
-# Worker will refuse new downloads if cache exceeds this
-# Default: No limit
-max_total_cache_gb = 100
-
-# Specific models this worker supports (allowlist)
-# If set, worker ONLY accepts tasks for these models
-# Example: ["wan22_ti2v_5b", "mochi_preview_bf16"]
-# Default: Accept all models
-# supported_models = ["wan22_ti2v_5b"]
-
-# Models this worker explicitly excludes (blocklist)
-# Worker will refuse tasks for these models
-# Example: ["wan22_ti2v_14b"]  # Too large
-# Default: No exclusions
-# excluded_models = []
-
-# Minimum VRAM required (in GB)
-# Used for validation - worker should have at least this much VRAM
-# Default: Auto-detected from GPU
-# min_vram_gb = 16
-
-
-# ==============================================================================
-# Example Configurations for Different Scenarios
-# ==============================================================================
-
-# Scenario 1: Small Worker (Laptop with 16GB GPU)
-# ------------------------------------------------------------------------------
-# [constraints]
-# max_model_size_gb = 15  # Only small models
-# supported_models = ["wan22_ti2v_5b", "mochi_preview_bf16"]
-
-# Scenario 2: Large Worker (Server with 2x 24GB GPUs)
-# ------------------------------------------------------------------------------
-# [constraints]
-# max_model_size_gb = 100  # Can handle large models
-# # No supported_models = accepts all models
-
-# Scenario 3: Specialized Worker (Only runs one specific model)
-# ------------------------------------------------------------------------------
-# [constraints]
-# supported_models = ["wan22_ti2v_14b"]
-
-# Scenario 4: Storage-Constrained Worker
-# ------------------------------------------------------------------------------
-# [constraints]
-# max_model_size_gb = 30
-# max_total_cache_gb = 100  # Only cache 100GB total
-# excluded_models = ["huge_model_100gb"]
+# Model allowlist/blocklist (use one or the other, not both)
+# supported_models = ["wan22_ti2v_5b"]  # Only accept these models
+# excluded_models = ["huge_model"]       # Never accept these models

@@ -130,6 +130,10 @@ pub enum ServerMessage {
         task_id: String,
         reason: String,
     },
+    DeleteModel {
+        model_id: String,
+        local_dir: String,
+    },
     TasksAvailable {},
     HeartbeatAck {},
     Error {

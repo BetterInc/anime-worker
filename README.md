@@ -168,6 +168,8 @@ models_dir = "/path/to/models"        # Default: ~/.anime-worker/models
 python_path = "python3"                # Auto-detected if not set
 python_scripts_dir = "./python"        # Default: auto-detected near binary
 heartbeat_interval_secs = 30           # Default: 30
+cleanup_interval_secs = 3600           # Cleanup interval (default: 1 hour)
+retention_hours = 24                   # File retention period (default: 24 hours)
 ```
 
 ### Worker Constraints
@@ -248,6 +250,25 @@ Releases are triggered by version tags (`v*.*.*`). Artifacts are packaged with t
 - `nvidia-smi` in PATH
 - Python 3.10+
 - Rust toolchain (for building from source)
+
+## Maintenance
+
+### Automatic Cleanup
+
+The worker automatically cleans up old temporary files and outputs while running. No cron setup needed!
+
+**What gets cleaned:**
+- Output directories older than 24 hours from `~/.anime-worker/output`
+- PNG files older than 24 hours from `~/.anime-worker/tmp`
+
+**Configuration** (in `config.toml`):
+
+```toml
+cleanup_interval_secs = 3600  # Run cleanup every hour (default)
+retention_hours = 24           # Keep files for 24 hours (default)
+```
+
+The cleanup runs automatically in the background while the worker daemon is active. You can adjust the interval and retention period to suit your needs.
 
 ## Environment Variables
 

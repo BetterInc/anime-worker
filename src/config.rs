@@ -69,6 +69,22 @@ pub struct WorkerConfig {
     /// Enable GPU/RAM metrics collection (default: false)
     #[serde(default)]
     pub enable_metrics_collection: bool,
+
+    /// Cleanup interval in seconds (default: 3600 = 1 hour)
+    #[serde(default = "default_cleanup_interval")]
+    pub cleanup_interval_secs: u64,
+
+    /// File retention period in hours (default: 24)
+    #[serde(default = "default_retention_hours")]
+    pub retention_hours: u64,
+}
+
+fn default_cleanup_interval() -> u64 {
+    3600 // 1 hour
+}
+
+fn default_retention_hours() -> u64 {
+    24 // 24 hours
 }
 
 fn default_models_dir() -> PathBuf {
@@ -321,6 +337,8 @@ mod tests {
             constraints: WorkerConstraints::default(),
             enable_log_streaming: false,
             enable_metrics_collection: false,
+            cleanup_interval_secs: default_cleanup_interval(),
+            retention_hours: default_retention_hours(),
         };
 
         // Save config

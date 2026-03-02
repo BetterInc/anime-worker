@@ -250,6 +250,22 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
         }
     });
 
+    // Cleanup task - runs periodically to remove old files
+    let cleanup_config_ref = config.clone();
+    let cleanup_handle = tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(cleanup_config_ref.cleanup_interval_secs));
+        loop {
+            interval.tick().await;
+            let cleanup_cfg = crate::cleanup::CleanupConfig::from_models_dir(
+                &cleanup_config_ref.models_dir,
+                cleanup_config_ref.retention_hours,
+            );
+            if let Err(e) = crate::cleanup::run_cleanup(&cleanup_cfg).await {
+                warn!("Cleanup failed: {}", e);
+            }
+        }
+    });
+
     // Active inference handle (for cancellation)
     let active_inference: Arc<Mutex<Option<runner::RunningInference>>> = Arc::new(Mutex::new(None));
 
@@ -341,6 +357,37 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                         }
                     }
 
+                    ServerMessage::DeleteModel {
+                        model_id,
+                        local_dir,
+                    } => {
+                        info!("Deleting model {} ({})", model_id, local_dir);
+                        let model_path = config.models_dir.join(&local_dir);
+                        if model_path.exists() {
+                            match tokio::fs::remove_dir_all(&model_path).await {
+                                Ok(_) => {
+                                    info!("✓ Model {} deleted from local cache", model_id);
+                                    // Update cached models list and send heartbeat
+                                    let cached = models::list_cached_models(&config.models_dir);
+                                    let hw_stats = build_hardware_stats(config);
+                                    let hb = WorkerMessage::Heartbeat {
+                                        worker_id: config.worker_id.clone(),
+                                        hardware_stats: hw_stats,
+                                        models_cached: cached,
+                                    };
+                                    if let Ok(json) = serde_json::to_string(&hb) {
+                                        let _ = write.lock().await.send(Message::Text(json)).await;
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to delete model {}: {}", model_id, e);
+                                }
+                            }
+                        } else {
+                            warn!("Model {} not found in local cache", model_id);
+                        }
+                    }
+
                     ServerMessage::Error { message } => {
                         error!("Server error: {}", message);
                     }
@@ -360,6 +407,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
     }
 
     heartbeat_handle.abort();
+    cleanup_handle.abort();
     log_batcher_handle.abort();
     Ok(())
 }
@@ -407,21 +455,28 @@ where
         let model_id_owned = model_id.to_string();
         let write_clone = write.clone();
 
-        let progress_cb = move |downloaded_gb: f64, total_gb: f64| {
-            let msg = WorkerMessage::ModelProgress {
-                task_id: task_id_owned.clone(),
-                model_id: model_id_owned.clone(),
-                downloaded_gb,
-                total_gb,
-            };
-            if let Ok(json) = serde_json::to_string(&msg) {
-                let write = write_clone.clone();
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    handle.spawn(async move {
-                        let _ = write.lock().await.send(Message::Text(json)).await;
-                    });
+        // Create a channel for progress updates from blocking thread
+        let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel::<(f64, f64)>();
+
+        // Spawn task to forward progress updates to WebSocket
+        let progress_task = tokio::spawn(async move {
+            while let Some((downloaded_gb, total_gb)) = progress_rx.recv().await {
+                let msg = WorkerMessage::ModelProgress {
+                    task_id: task_id_owned.clone(),
+                    model_id: model_id_owned.clone(),
+                    downloaded_gb,
+                    total_gb,
+                };
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    let _ = write_clone.lock().await.send(Message::Text(json)).await;
                 }
             }
+        });
+
+        let progress_tx_clone = progress_tx.clone();
+        let progress_cb = move |downloaded_gb: f64, total_gb: f64| {
+            // Send progress update through channel (works from blocking thread)
+            let _ = progress_tx_clone.send((downloaded_gb, total_gb));
         };
 
         models::download_model(
@@ -432,6 +487,10 @@ where
             progress_cb,
         )
         .await?;
+
+        // Close channel and wait for progress task to finish
+        drop(progress_tx);
+        let _ = progress_task.await;
     }
 
     // 2. Download last frame if first task needs it

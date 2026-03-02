@@ -14,7 +14,7 @@ from diffusers.utils import export_to_video
 from PIL import Image
 
 from .config import validate_generation_params
-from .hardware import VRAMManager, get_optimal_vae_batch_size
+from .hardware import VRAMManager
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +39,23 @@ def decode_latents_with_progress(pipeline, latents, num_frames, progress_callbac
             batch_size = 4
         else:
             batch_size = 2  # Very low VRAM
-        logger.info(f"  VAE decode: {free_vram_gb:.1f}GB free, using batch_size={batch_size}")
+        logger.info(
+            f"  VAE decode: {free_vram_gb:.1f}GB free, using batch_size={batch_size}"
+        )
     else:
         batch_size = 4
 
     # Check if VAE has temporal dimension handling
     # Wan VAE expects: (B, C, T, H, W)
-    is_video_vae = hasattr(vae.config, 'temporal_compression_ratio') or 'Wan' in type(vae).__name__
+    is_video_vae = (
+        hasattr(vae.config, "temporal_compression_ratio") or "Wan" in type(vae).__name__
+    )
 
     if is_video_vae:
         # Video VAE - decode all at once but with memory optimization
-        logger.info(f"  VAE decode: Video VAE detected, decoding {num_frames} frames...")
+        logger.info(
+            f"  VAE decode: Video VAE detected, decoding {num_frames} frames..."
+        )
         start_time = time.time()
 
         # Move VAE to GPU if not already
@@ -83,7 +89,9 @@ def decode_latents_with_progress(pipeline, latents, num_frames, progress_callbac
 
                     if progress_callback:
                         pct = int((i / T) * 100)
-                        progress_callback(pct, f"VAE decode chunk {i//chunk_size + 1}")
+                        progress_callback(
+                            pct, f"VAE decode chunk {i // chunk_size + 1}"
+                        )
 
                     with torch.no_grad():
                         decoded_chunk = vae.decode(chunk).sample
@@ -110,7 +118,9 @@ def decode_latents_with_progress(pipeline, latents, num_frames, progress_callbac
 
     else:
         # Image VAE - decode frame by frame
-        logger.info(f"  VAE decode: Image VAE, decoding {num_frames} frames in batches of {batch_size}...")
+        logger.info(
+            f"  VAE decode: Image VAE, decoding {num_frames} frames in batches of {batch_size}..."
+        )
 
         frames = []
         total_batches = (num_frames + batch_size - 1) // batch_size
@@ -192,12 +202,12 @@ def generate_preview_frame(
     torch.cuda.empty_cache()
 
     # Enable VAE tiling to reduce peak memory usage
-    if hasattr(pipeline, 'enable_vae_tiling'):
+    if hasattr(pipeline, "enable_vae_tiling"):
         pipeline.enable_vae_tiling()
         logger.info("  VAE tiling enabled (reduces memory usage)")
 
     # Enable sliced attention for further memory savings
-    if hasattr(pipeline, 'enable_vae_slicing'):
+    if hasattr(pipeline, "enable_vae_slicing"):
         pipeline.enable_vae_slicing()
         logger.info("  VAE slicing enabled")
 
@@ -209,9 +219,7 @@ def generate_preview_frame(
     def diffusion_step_callback(step, timestep, latents):
         pct = int((step / total_steps) * 100)
         if step % max(1, total_steps // 10) == 0:  # Log every 10%
-            logger.info(
-                f"  Generation progress: {pct}% (step {step}/{total_steps})"
-            )
+            logger.info(f"  Generation progress: {pct}% (step {step}/{total_steps})")
         # Report to parent via progress_callback if provided
         if progress_callback:
             # Diffusion is 0-80% of the process, VAE decode is 80-100%
@@ -265,7 +273,9 @@ def generate_preview_frame(
     # Log VRAM before
     if torch.cuda.is_available():
         free, total = torch.cuda.mem_get_info(0)
-        logger.info(f"  VRAM before inference: {free/(1024**3):.1f}GB free / {total/(1024**3):.1f}GB total")
+        logger.info(
+            f"  VRAM before inference: {free / (1024**3):.1f}GB free / {total / (1024**3):.1f}GB total"
+        )
 
     # Try to get latents separately so we can decode with progress
     # This gives us control over VAE decode for progress reporting
@@ -284,7 +294,9 @@ def generate_preview_frame(
     # Log VRAM after diffusion
     if torch.cuda.is_available():
         free, total = torch.cuda.mem_get_info(0)
-        logger.info(f"  VRAM after diffusion: {free/(1024**3):.1f}GB free / {total/(1024**3):.1f}GB total")
+        logger.info(
+            f"  VRAM after diffusion: {free / (1024**3):.1f}GB free / {total / (1024**3):.1f}GB total"
+        )
 
     # CRITICAL: Offload model to CPU before VAE decode to free VRAM
     # This is essential for 16GB cards where model + VAE don't fit together
@@ -292,9 +304,15 @@ def generate_preview_frame(
     vram_manager.offload_for_vae(progress_callback=progress_callback)
 
     # Decode VAE with progress
-    if use_custom_vae_decode and hasattr(output, "frames") and output.frames is not None:
+    if (
+        use_custom_vae_decode
+        and hasattr(output, "frames")
+        and output.frames is not None
+    ):
         latents = output.frames[0] if isinstance(output.frames, list) else output.frames
-        logger.info(f"  Got latents shape: {latents.shape if hasattr(latents, 'shape') else 'unknown'}")
+        logger.info(
+            f"  Got latents shape: {latents.shape if hasattr(latents, 'shape') else 'unknown'}"
+        )
 
         # Progress callback that logs and reports to parent
         def vae_progress(pct, msg):
@@ -305,22 +323,23 @@ def generate_preview_frame(
                 progress_callback(scaled_pct, f"VAE: {msg}")
 
         frames = decode_latents_with_progress(
-            pipeline,
-            latents,
-            num_frames,
-            progress_callback=vae_progress
+            pipeline, latents, num_frames, progress_callback=vae_progress
         )
         logger.info(f"  Got {len(frames)} decoded frames")
     else:
         # Fallback: pipeline already decoded
         logger.info("  Extracting frames from pipeline output...")
         frames = output.frames[0] if hasattr(output, "frames") else output.images
-        logger.info(f"  Got {len(frames) if hasattr(frames, '__len__') else 'unknown'} frames")
+        logger.info(
+            f"  Got {len(frames) if hasattr(frames, '__len__') else 'unknown'} frames"
+        )
 
     # Log VRAM after VAE
     if torch.cuda.is_available():
         free, total = torch.cuda.mem_get_info(0)
-        logger.info(f"  VRAM after VAE decode: {free/(1024**3):.1f}GB free / {total/(1024**3):.1f}GB total")
+        logger.info(
+            f"  VRAM after VAE decode: {free / (1024**3):.1f}GB free / {total / (1024**3):.1f}GB total"
+        )
 
     video_path = output_path.replace(".png", ".mp4")
     export_to_video(frames, video_path, fps=preview_config["fps"])

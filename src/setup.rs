@@ -169,6 +169,8 @@ pub fn gather_config(theme: &ColorfulTheme) -> anyhow::Result<WorkerConfig> {
         constraints,
         enable_log_streaming: false,
         enable_metrics_collection: false,
+        cleanup_interval_secs: 3600,
+        retention_hours: 24,
     })
 }
 
@@ -576,6 +578,8 @@ mod tests {
             },
             enable_log_streaming: false,
             enable_metrics_collection: false,
+            cleanup_interval_secs: 3600,
+            retention_hours: 24,
         };
 
         assert!(cfg.constraints.cpu_limit.is_none());
@@ -623,6 +627,8 @@ mod tests {
             },
             enable_log_streaming: false,
             enable_metrics_collection: false,
+            cleanup_interval_secs: 3600,
+            retention_hours: 24,
         };
 
         cfg.save(&path).expect("save should succeed");
