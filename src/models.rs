@@ -60,6 +60,28 @@ pub async fn download_model(
     .await
 }
 
+/// Download a model with optional model_id tracking and cancellation support
+pub async fn download_model_with_cancellation(
+    hf_repo: &str,
+    models_dir: &Path,
+    local_dir: &str,
+    model_id: Option<&str>,
+    model_size_gb: f64,
+    cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    progress_callback: impl Fn(f64, f64) + Send + 'static,
+) -> anyhow::Result<PathBuf> {
+    download_model_internal(
+        hf_repo,
+        models_dir,
+        local_dir,
+        model_id,
+        model_size_gb,
+        Some(cancel_flag),
+        progress_callback,
+    )
+    .await
+}
+
 /// Download a model with optional model_id tracking
 pub async fn download_model_with_id(
     hf_repo: &str,
@@ -67,6 +89,28 @@ pub async fn download_model_with_id(
     local_dir: &str,
     model_id: Option<&str>,
     model_size_gb: f64,
+    progress_callback: impl Fn(f64, f64) + Send + 'static,
+) -> anyhow::Result<PathBuf> {
+    download_model_internal(
+        hf_repo,
+        models_dir,
+        local_dir,
+        model_id,
+        model_size_gb,
+        None,
+        progress_callback,
+    )
+    .await
+}
+
+/// Internal download implementation with optional cancellation
+async fn download_model_internal(
+    hf_repo: &str,
+    models_dir: &Path,
+    local_dir: &str,
+    model_id: Option<&str>,
+    model_size_gb: f64,
+    cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     progress_callback: impl Fn(f64, f64) + Send + 'static,
 ) -> anyhow::Result<PathBuf> {
     let model_path = models_dir.join(local_dir);
@@ -155,6 +199,25 @@ pub async fn download_model_with_id(
         let mut last_size_gb = 0.0;
 
         loop {
+            // Check for cancellation
+            if let Some(ref flag) = cancel_flag {
+                if flag.load(std::sync::atomic::Ordering::SeqCst) {
+                    info!("Download cancelled, killing process");
+                    #[cfg(unix)]
+                    {
+                        unsafe {
+                            libc::kill(child.id() as i32, libc::SIGTERM);
+                        }
+                    }
+                    #[cfg(windows)]
+                    {
+                        let _ = child.kill();
+                    }
+                    let _ = child.wait();
+                    return Err(anyhow::anyhow!("Download cancelled by user"));
+                }
+            }
+
             // Check if process is still running
             match child.try_wait() {
                 Ok(Some(status)) => {

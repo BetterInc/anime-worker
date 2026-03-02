@@ -77,9 +77,11 @@ pub async fn run(
     config: Arc<WorkerConfig>,
     log_tx: Option<tokio::sync::mpsc::Sender<crate::protocol::LogEntry>>,
 ) {
+    let download_manager = Arc::new(crate::download_manager::DownloadManager::new());
+
     loop {
         info!("Connecting to {}...", config.server_url);
-        match connect_and_run(&config, log_tx.clone()).await {
+        match connect_and_run(&config, log_tx.clone(), download_manager.clone()).await {
             Ok(()) => info!("Connection closed cleanly"),
             Err(e) => error!("Connection error: {}", e),
         }
@@ -91,6 +93,7 @@ pub async fn run(
 async fn connect_and_run(
     config: &WorkerConfig,
     log_tx_external: Option<tokio::sync::mpsc::Sender<crate::protocol::LogEntry>>,
+    download_manager: Arc<crate::download_manager::DownloadManager>,
 ) -> anyhow::Result<()> {
     let ws_url = format!(
         "{}/ws/worker",
@@ -385,8 +388,19 @@ async fn connect_and_run(
 
                     ServerMessage::TaskCancel { task_id, reason } => {
                         info!("Task {} cancelled: {}", &task_id[..8], reason);
+
+                        // Cancel active inference if running
                         if let Some(handle) = active_inference.lock().await.as_ref() {
                             handle.cancel().await;
+                        }
+
+                        // Cancel download if task_id is a manual download
+                        if task_id.starts_with("manual-download-") {
+                            let model_id =
+                                task_id.strip_prefix("manual-download-").unwrap_or(&task_id);
+                            if download_manager.cancel(model_id).await {
+                                info!("Cancelled model download: {}", model_id);
+                            }
                         }
                     }
 
@@ -436,6 +450,7 @@ async fn connect_and_run(
                         // Spawn download task in background
                         let config_clone = config.clone();
                         let write_clone = write.clone();
+                        let dl_mgr = download_manager.clone();
 
                         tokio::spawn(async move {
                             let model_path = config_clone.models_dir.join(&local_dir);
@@ -463,7 +478,7 @@ async fn connect_and_run(
 
                             info!("Downloading model {} from {}", model_name, hf_repo);
 
-                            // Download model with progress reporting
+                            // Download model with progress reporting and cancellation support
                             // Use a dummy task_id for manual downloads
                             let task_id =
                                 format!("manual-download-{}", &model_id[..8.min(model_id.len())]);
@@ -471,12 +486,16 @@ async fn connect_and_run(
                             let model_id_clone = model_id.clone();
                             let write_progress = write_clone.clone();
 
-                            let result = models::download_model_with_id(
+                            // Register download for cancellation
+                            let cancel_flag = dl_mgr.register(model_id.clone()).await;
+
+                            let result = models::download_model_with_cancellation(
                                 &hf_repo,
                                 &config_clone.models_dir,
                                 &local_dir,
                                 Some(&model_id),
                                 size_gb,
+                                cancel_flag,
                                 move |downloaded_gb: f64, total_gb: f64| {
                                     info!(
                                         "Download progress: {:.1}/{:.1} GB",

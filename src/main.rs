@@ -6,6 +6,7 @@
 mod cleanup;
 mod client;
 mod config;
+mod download_manager;
 mod hardware;
 mod log_layer;
 mod metrics;
