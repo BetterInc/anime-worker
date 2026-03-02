@@ -65,7 +65,7 @@ Global option: `--config <path>` to specify a custom config file path.
 
 ## Supported Models
 
-Configured via `python/model_configs.yaml`:
+Model configurations are managed by the central server and sent to workers via WebSocket:
 
 | Model ID | Pipeline | Notes |
 |----------|----------|-------|
@@ -217,7 +217,6 @@ The `python/` directory contains the inference scripts:
 |------|---------|
 | `inference_runner.py` | Entry point spawned by Rust worker |
 | `setup_env.py` | Creates venv and installs dependencies |
-| `model_configs.yaml` | Model ID -> pipeline class mapping |
 | `lib/pipeline.py` | Pipeline loading and setup |
 | `lib/inference.py` | Frame generation logic |
 | `lib/upscale.py` | Real-ESRGAN video upscaling |

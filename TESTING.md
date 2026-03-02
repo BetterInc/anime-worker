@@ -57,12 +57,15 @@ pip install -r requirements.txt
 
 ### CPU Test Model
 
-**In models_config.yaml:**
+**Configuration (from server database):**
 ```yaml
 test_cpu:
-  name: "CPU Test Model"
-  size_gb: 20        # Model size
-  # Ultra-small settings in config/models/test_cpu.yaml:
+  model_class: "WanPipeline"
+  vae_class: "AutoencoderKLWan"
+  local_dir: "Wan2.2-TI2V-5B-Diffusers"
+  model_dtype: "bf16"
+  vae_dtype: "float32"
+  # Ultra-small test settings:
   width: 64          # Tiny!
   height: 64
   num_frames: 5      # Just 5 frames
