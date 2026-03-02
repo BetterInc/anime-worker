@@ -75,6 +75,11 @@ pub enum WorkerMessage {
         result_filename: String,
         metadata: serde_json::Value,
     },
+    TaskFailed {
+        task_id: String,
+        error_message: String,
+        phase: String,
+    },
     Log {
         #[serde(skip_serializing_if = "Option::is_none")]
         job_id: Option<String>,

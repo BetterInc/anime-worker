@@ -329,6 +329,7 @@ async fn connect_and_run(
                         let active = active_inference.clone();
                         let job_id_arc = current_job_id.clone();
                         let log_tx_clone = log_tx.clone();
+                        let tasks_clone = tasks.clone();
 
                         tokio::spawn(async move {
                             // Set current job ID for metrics
@@ -340,7 +341,7 @@ async fn connect_and_run(
                                 &active,
                                 &job_id,
                                 &task_type,
-                                tasks,
+                                tasks.clone(),
                                 project,
                                 &model_id,
                                 model_config,
@@ -354,6 +355,23 @@ async fn connect_and_run(
 
                             if let Err(e) = result {
                                 error!("Job {} failed: {}", &job_id[..8], e);
+
+                                // Send TaskFailed for all tasks in this batch
+                                for task in &tasks_clone {
+                                    if let Some(task_id) =
+                                        task.get("task_id").and_then(|v| v.as_str())
+                                    {
+                                        let fail_msg = WorkerMessage::TaskFailed {
+                                            task_id: task_id.to_string(),
+                                            error_message: e.to_string(),
+                                            phase: "failed".to_string(),
+                                        };
+                                        if let Ok(json) = serde_json::to_string(&fail_msg) {
+                                            let _ =
+                                                write.lock().await.send(Message::Text(json)).await;
+                                        }
+                                    }
+                                }
                             }
 
                             // Request next job
@@ -449,6 +467,7 @@ async fn connect_and_run(
                             // Use a dummy task_id for manual downloads
                             let task_id =
                                 format!("manual-download-{}", &model_id[..8.min(model_id.len())]);
+                            let task_id_for_callback = task_id.clone();
                             let model_id_clone = model_id.clone();
                             let write_progress = write_clone.clone();
 
@@ -466,7 +485,7 @@ async fn connect_and_run(
 
                                     // Send progress update via WebSocket
                                     let msg = WorkerMessage::ModelProgress {
-                                        task_id: task_id.clone(),
+                                        task_id: task_id_for_callback.clone(),
                                         model_id: model_id_clone.clone(),
                                         downloaded_gb,
                                         total_gb,
@@ -508,6 +527,20 @@ async fn connect_and_run(
                                 }
                                 Err(e) => {
                                     error!("Failed to download model {}: {}", model_id, e);
+
+                                    // Report download failure via TaskFailed
+                                    let err_msg = WorkerMessage::TaskFailed {
+                                        task_id: task_id.clone(),
+                                        error_message: format!("Model download failed: {}", e),
+                                        phase: "downloading_model".to_string(),
+                                    };
+                                    if let Ok(json) = serde_json::to_string(&err_msg) {
+                                        let _ = write_clone
+                                            .lock()
+                                            .await
+                                            .send(Message::Text(json))
+                                            .await;
+                                    }
                                 }
                             }
                         });
@@ -627,7 +660,23 @@ where
             .unwrap_or(&config.models_dir)
             .join("tmp")
             .join(format!("{}_lastframe.png", job_id));
-        upload::download_file(&config.server_url, url, &config.api_key, &dest).await?;
+
+        if let Err(e) = upload::download_file(&config.server_url, url, &config.api_key, &dest).await
+        {
+            error!("Last frame download failed: {}", e);
+            // Send TaskFailed for first task (which needs the last frame)
+            if let Some(task_id) = tasks[0].get("task_id").and_then(|v| v.as_str()) {
+                let fail_msg = WorkerMessage::TaskFailed {
+                    task_id: task_id.to_string(),
+                    error_message: format!("Last frame download failed: {}", e),
+                    phase: "downloading_input".to_string(),
+                };
+                if let Ok(json) = serde_json::to_string(&fail_msg) {
+                    let _ = write.lock().await.send(Message::Text(json)).await;
+                }
+            }
+            return Err(e);
+        }
         Some(dest)
     } else {
         None
@@ -722,6 +771,20 @@ where
                 }
             }
             PythonOutput::Error { message } => {
+                // Send TaskFailed for all tasks
+                error!("Python inference error: {}", message);
+                for task in &tasks {
+                    if let Some(task_id) = task.get("task_id").and_then(|v| v.as_str()) {
+                        let fail_msg = WorkerMessage::TaskFailed {
+                            task_id: task_id.to_string(),
+                            error_message: message.clone(),
+                            phase: "inference".to_string(),
+                        };
+                        if let Ok(json) = serde_json::to_string(&fail_msg) {
+                            let _ = write.lock().await.send(Message::Text(json)).await;
+                        }
+                    }
+                }
                 anyhow::bail!("Python inference error: {}", message);
             }
         }
