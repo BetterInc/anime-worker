@@ -73,10 +73,13 @@ fn build_hardware_stats(config: &WorkerConfig) -> HardwareStats {
 }
 
 /// Run the worker client loop with auto-reconnect.
-pub async fn run(config: Arc<WorkerConfig>) {
+pub async fn run(
+    config: Arc<WorkerConfig>,
+    log_tx: Option<tokio::sync::mpsc::Sender<crate::protocol::LogEntry>>,
+) {
     loop {
         info!("Connecting to {}...", config.server_url);
-        match connect_and_run(&config).await {
+        match connect_and_run(&config, log_tx.clone()).await {
             Ok(()) => info!("Connection closed cleanly"),
             Err(e) => error!("Connection error: {}", e),
         }
@@ -85,7 +88,10 @@ pub async fn run(config: Arc<WorkerConfig>) {
     }
 }
 
-async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
+async fn connect_and_run(
+    config: &WorkerConfig,
+    log_tx_external: Option<tokio::sync::mpsc::Sender<crate::protocol::LogEntry>>,
+) -> anyhow::Result<()> {
     let ws_url = format!(
         "{}/ws/worker",
         config
@@ -147,8 +153,15 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
         write.lock().await.send(Message::Text(msg)).await?;
     }
 
-    // Log batching channel
-    let (log_tx, mut log_rx) = tokio::sync::mpsc::channel::<crate::protocol::LogEntry>(1000);
+    // Use external log channel if provided, otherwise create internal one
+    let (log_tx, mut log_rx) = if let Some(external_tx) = log_tx_external {
+        // Use the channel from main that has the tracing layer attached
+        let (_internal_tx, internal_rx) =
+            tokio::sync::mpsc::channel::<crate::protocol::LogEntry>(1000);
+        (external_tx, internal_rx)
+    } else {
+        tokio::sync::mpsc::channel::<crate::protocol::LogEntry>(1000)
+    };
 
     // Current job ID for metrics
     let current_job_id = Arc::new(Mutex::new(None::<String>));
@@ -439,10 +452,11 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                             let model_id_clone = model_id.clone();
                             let write_progress = write_clone.clone();
 
-                            let result = models::download_model(
+                            let result = models::download_model_with_id(
                                 &hf_repo,
                                 &config_clone.models_dir,
                                 &local_dir,
+                                Some(&model_id),
                                 size_gb,
                                 move |downloaded_gb: f64, total_gb: f64| {
                                     info!(

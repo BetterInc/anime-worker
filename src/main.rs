@@ -7,6 +7,7 @@ mod cleanup;
 mod client;
 mod config;
 mod hardware;
+mod log_layer;
 mod metrics;
 mod models;
 mod protocol;
@@ -85,13 +86,6 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
-
     let cli = Cli::parse();
 
     match cli.command {
@@ -102,6 +96,36 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(config::config_file_path);
 
             let mut cfg = config::WorkerConfig::load(&config_path)?;
+
+            // Initialize tracing with optional API log forwarding
+            let log_tx = if cfg.enable_log_streaming {
+                let (tx, _rx) = tokio::sync::mpsc::channel(1000);
+
+                // Setup tracing with API layer
+                use tracing_subscriber::layer::SubscriberExt;
+                let api_layer = log_layer::ApiLogLayer::new(tx.clone());
+                let subscriber = tracing_subscriber::fmt()
+                    .with_env_filter(
+                        EnvFilter::try_from_default_env()
+                            .unwrap_or_else(|_| EnvFilter::new("info")),
+                    )
+                    .finish()
+                    .with(api_layer);
+
+                tracing::subscriber::set_global_default(subscriber)?;
+
+                // Return both tx and rx, we'll use rx in client
+                Some(tx)
+            } else {
+                // No log streaming, just basic console logging
+                tracing_subscriber::fmt()
+                    .with_env_filter(
+                        EnvFilter::try_from_default_env()
+                            .unwrap_or_else(|_| EnvFilter::new("info")),
+                    )
+                    .init();
+                None
+            };
             info!("Loaded config from {}", config_path.display());
             info!("Worker: {} ({})", cfg.worker_name, &cfg.worker_id[..8]);
             info!("Server: {}", cfg.server_url);
@@ -176,8 +200,33 @@ async fn main() -> anyhow::Result<()> {
             // Ensure models dir exists
             std::fs::create_dir_all(&cfg.models_dir)?;
 
-            client::run(Arc::new(cfg)).await;
+            client::run(Arc::new(cfg), log_tx).await;
         }
+
+        _ => {
+            // For non-Run commands, initialize simple console logging
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+                )
+                .init();
+
+            handle_other_commands(cli).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_other_commands(cli: Cli) -> anyhow::Result<()> {
+    let config_path = cli
+        .config
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(config::config_file_path);
+
+    match cli.command {
+        Commands::Run => unreachable!(),
 
         Commands::Init {
             server_url,
@@ -185,11 +234,6 @@ async fn main() -> anyhow::Result<()> {
             api_key,
             name,
         } => {
-            let config_path = cli
-                .config
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(config::config_file_path);
-
             // Auto-discover Python
             let python_path = match config::discover_python() {
                 Some(path) => {
@@ -259,11 +303,6 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Models => {
-            let config_path = cli
-                .config
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(config::config_file_path);
-
             let cfg = config::WorkerConfig::load(&config_path)?;
             let cached = models::list_cached_models(&cfg.models_dir);
             if cached.is_empty() {
@@ -277,12 +316,12 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Setup => {
-            // Target: ./config.toml in the current working directory (not ~/.anime-worker).
-            // This matches the documented usage of `./anime-worker setup`.
-            let config_path = cli
-                .config
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| std::path::PathBuf::from("config.toml"));
+            // Use config.toml in current dir if --config not specified
+            let setup_config_path = if cli.config.is_some() {
+                config_path.clone()
+            } else {
+                std::path::PathBuf::from("config.toml")
+            };
 
             // Locate the python/ directory: try exe-relative first, then cwd-relative.
             let scripts_dir = {
@@ -308,7 +347,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            setup::run(&config_path, &scripts_dir)?;
+            setup::run(&setup_config_path, &scripts_dir)?;
         }
 
         Commands::SetupPython => {

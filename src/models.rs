@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use tracing::{info, warn};
+use tracing::info;
 
 /// Check if a model is fully cached locally.
 /// Requires both model_index.json AND .download_complete marker.
@@ -14,65 +14,29 @@ pub fn is_model_cached(models_dir: &Path, local_dir: &str) -> bool {
 
 /// List all fully cached model directories.
 /// Requires both model_index.json AND .download_complete marker.
-/// Returns model IDs (not local directory names) by mapping via model_configs.yaml
+/// Returns model IDs by reading .model_id marker file, or falls back to local_dir name
 pub fn list_cached_models(models_dir: &Path) -> Vec<String> {
-    let mut local_dirs = Vec::new();
+    let mut model_ids = Vec::new();
     if let Ok(entries) = std::fs::read_dir(models_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             // Only report as cached if download completed successfully
             if path.join("model_index.json").exists() && path.join(".download_complete").exists() {
-                if let Some(name) = entry.file_name().to_str() {
-                    local_dirs.push(name.to_string());
+                // Try to read .model_id marker file first
+                if let Ok(model_id) = std::fs::read_to_string(path.join(".model_id")) {
+                    model_ids.push(model_id.trim().to_string());
+                } else if let Some(name) = entry.file_name().to_str() {
+                    // Fallback: use directory name (for old downloads without .model_id)
+                    model_ids.push(name.to_string());
                 }
             }
         }
     }
 
-    // Map local directories to model IDs using model_configs.yaml
-    map_local_dirs_to_model_ids(&local_dirs)
+    model_ids
 }
 
-/// Map local directory names to model IDs using model_configs.yaml
-fn map_local_dirs_to_model_ids(local_dirs: &[String]) -> Vec<String> {
-    use std::collections::HashMap;
-
-    // Try to load model_configs.yaml from python dir
-    let config_paths = vec![
-        PathBuf::from("/app/python/model_configs.yaml"),
-        PathBuf::from("./python/model_configs.yaml"),
-        PathBuf::from("../python/model_configs.yaml"),
-    ];
-
-    for config_path in config_paths {
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content) {
-                if let Some(models) = config.get("models").and_then(|m| m.as_mapping()) {
-                    // Build reverse map: local_dir -> model_id
-                    let mut dir_to_id: HashMap<String, String> = HashMap::new();
-                    for (model_id, model_data) in models {
-                        if let (Some(id_str), Some(local_dir)) = (
-                            model_id.as_str(),
-                            model_data.get("local_dir").and_then(|v| v.as_str()),
-                        ) {
-                            dir_to_id.insert(local_dir.to_string(), id_str.to_string());
-                        }
-                    }
-
-                    // Map the local dirs to model IDs
-                    return local_dirs
-                        .iter()
-                        .filter_map(|dir| dir_to_id.get(dir).cloned())
-                        .collect();
-                }
-            }
-        }
-    }
-
-    // Fallback: return local dirs if mapping fails
-    warn!("Failed to load model_configs.yaml, reporting local dirs instead of model IDs");
-    local_dirs.to_vec()
-}
+// Removed map_local_dirs_to_model_ids - now using .model_id marker files
 
 /// Download a model from HuggingFace using Python CLI (more reliable for large files).
 ///
@@ -85,6 +49,26 @@ pub async fn download_model(
     model_size_gb: f64,
     progress_callback: impl Fn(f64, f64) + Send + 'static,
 ) -> anyhow::Result<PathBuf> {
+    download_model_with_id(
+        hf_repo,
+        models_dir,
+        local_dir,
+        None,
+        model_size_gb,
+        progress_callback,
+    )
+    .await
+}
+
+/// Download a model with optional model_id tracking
+pub async fn download_model_with_id(
+    hf_repo: &str,
+    models_dir: &Path,
+    local_dir: &str,
+    model_id: Option<&str>,
+    model_size_gb: f64,
+    progress_callback: impl Fn(f64, f64) + Send + 'static,
+) -> anyhow::Result<PathBuf> {
     let model_path = models_dir.join(local_dir);
     std::fs::create_dir_all(&model_path)?;
 
@@ -92,6 +76,7 @@ pub async fn download_model(
 
     let hf_repo = hf_repo.to_string();
     let model_path_str = model_path.to_string_lossy().to_string();
+    let model_id_owned = model_id.map(|s| s.to_string());
 
     // Check available disk space before download
     let model_path_for_check = model_path.clone();
@@ -235,6 +220,14 @@ pub async fn download_model(
             format!("Downloaded: {}\nSize: {:.2} GB\n", hf_repo, model_size_gb),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create download marker: {}", e))?;
+
+        // Create model_id marker if provided
+        if let Some(mid) = model_id_owned {
+            let id_marker_path = model_path_buf.join(".model_id");
+            std::fs::write(&id_marker_path, mid)
+                .map_err(|e| anyhow::anyhow!("Failed to create model_id marker: {}", e))?;
+        }
+
         info!("Created download complete marker");
 
         Ok(())
