@@ -394,10 +394,12 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                         model_id,
                         model_name,
                         hf_repo,
+                        local_dir,
+                        size_gb,
                     } => {
                         info!(
-                            "Received download request for model: {} ({})",
-                            model_name, model_id
+                            "Received download request for model: {} ({}, {:.1} GB)",
+                            model_name, model_id, size_gb
                         );
 
                         // Spawn download task in background
@@ -405,9 +407,6 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                         let write_clone = write.clone();
 
                         tokio::spawn(async move {
-                            // TODO: Get model config from server or config file
-                            // For now, assume local_dir is same as model_id
-                            let local_dir = model_id.clone();
                             let model_path = config_clone.models_dir.join(&local_dir);
 
                             // Check if already downloaded
@@ -444,7 +443,7 @@ async fn connect_and_run(config: &WorkerConfig) -> anyhow::Result<()> {
                                 &hf_repo,
                                 &config_clone.models_dir,
                                 &local_dir,
-                                20.0, // TODO: Get actual size from server
+                                size_gb,
                                 move |downloaded_gb: f64, total_gb: f64| {
                                     info!(
                                         "Download progress: {:.1}/{:.1} GB",

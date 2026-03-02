@@ -138,6 +138,8 @@ pub enum ServerMessage {
         model_id: String,
         model_name: String,
         hf_repo: String,
+        local_dir: String,
+        size_gb: f64,
     },
     TasksAvailable {},
     HeartbeatAck {},
