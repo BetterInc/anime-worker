@@ -37,6 +37,8 @@ jobs:
             artifact: anime-worker
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for git describe
 
       - uses: dtolnay/rust-toolchain@stable
         with:

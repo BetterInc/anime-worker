@@ -9,6 +9,9 @@ license = "MIT"
 name = "anime-worker"
 path = "src/main.rs"
 
+[build-dependencies]
+chrono = "0.4"
+
 [dependencies]
 # Async runtime (includes process, io, fs, net, sync, time)
 tokio = { version = "1", features = ["full"] }

@@ -20,10 +20,21 @@ use clap::{Parser, Subcommand};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+fn version() -> &'static str {
+    concat!(
+        env!("GIT_VERSION"),
+        " (",
+        env!("GIT_COMMIT"),
+        " ",
+        env!("BUILD_DATE"),
+        ")"
+    )
+}
+
 #[derive(Parser)]
 #[command(
     name = "anime-worker",
-    version,
+    version = version(),
     about = "Distributed GPU worker for Anime Studio"
 )]
 struct Cli {
