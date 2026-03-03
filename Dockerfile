@@ -2,14 +2,18 @@ FROM rust:latest as builder
 
 WORKDIR /build
 
-# Install build dependencies
+# Install build dependencies (including git for build.rs)
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Cargo files
-COPY Cargo.toml Cargo.lock ./
+# Copy Cargo files and build script
+COPY Cargo.toml Cargo.lock build.rs ./
+
+# Copy .git for version info (build.rs needs it)
+COPY .git/ ./.git/
 
 # Copy source code
 COPY src/ ./src/
